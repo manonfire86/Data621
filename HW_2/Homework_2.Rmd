@@ -1,0 +1,57 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(knitr)
+```
+
+Step 1:
+```{r}
+data <- read.csv("https://raw.githubusercontent.com/marioipena/DATA621/main/classification-output-data.csv", header = TRUE)
+```
+
+Step 2:
+```{r}
+cm <- as.data.frame(table("Actual Class" = data$class, "Predicted Class" = data$scored.class))
+kable(cm)
+```
+
+Step 3:
+```{r}
+accuracy <- function(df){
+  cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
+  accuracy <- (cm$Freq[1] + cm$Freq[4])/sum(cm$Freq)
+return(accuracy)
+}
+```
+
+```{r}
+accuracy(data)
+```
+
+Step 4:
+```{r}
+class_error_rate <- function(df){
+  cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
+  class_error_rate <- (cm$Freq[2] + cm$Freq[3])/sum(cm$Freq)
+return(class_error_rate)
+}
+```
+
+```{r}
+class_error_rate(data)
+```
+
+Verifying that accuracy and error rate sum up to one.
+```{r}
+accuracy_result <- accuracy(data)
+error_result <- class_error_rate(data)
+verify <- accuracy_result + error_result
+verify
+```
