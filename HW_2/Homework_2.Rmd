@@ -9,21 +9,37 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(knitr)
+library(caret)
 ```
 
 Step 1:
-```{r}
+```{r dataload}
 data <- read.csv("https://raw.githubusercontent.com/marioipena/DATA621/main/classification-output-data.csv", header = TRUE)
 ```
 
+
 Step 2:
-```{r}
+```{r dataframe_function}
 cm <- as.data.frame(table("Actual Class" = data$class, "Predicted Class" = data$scored.class))
 kable(cm)
 ```
 
+Caret Package Metric Calculation:
+
+```{r caret_POW}
+car_cm = confusionMatrix(table("Actual Class" = data$class, "Predicted Class" = data$scored.class))
+```
+
+```{r print_caretbyclass}
+car_cm
+```
+
+```{r print_caretbyclass}
+car_cm$byClass
+```
+
 Step 3:
-```{r}
+```{r accuracy}
 accuracy <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
   accuracy <- (cm$Freq[1] + cm$Freq[4])/sum(cm$Freq)
@@ -31,12 +47,12 @@ return(accuracy)
 }
 ```
 
-```{r}
+```{r print_accuracy}
 accuracy(data)
 ```
 
 Step 4:
-```{r}
+```{r classification_error_rate}
 class_error_rate <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
   class_error_rate <- (cm$Freq[2] + cm$Freq[3])/sum(cm$Freq)
@@ -49,7 +65,7 @@ class_error_rate(data)
 ```
 
 Verifying that accuracy and error rate sum up to one.
-```{r}
+```{r verification}
 accuracy_result <- accuracy(data)
 error_result <- class_error_rate(data)
 verify <- accuracy_result + error_result
@@ -57,7 +73,7 @@ verify
 ```
 
 Step 5:
-```{r}
+```{r precision}
 precision <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
   precision <- cm$Freq[1]/(cm$Freq[1]+cm$Freq[2])
@@ -65,8 +81,12 @@ return(precision)
 }
 ```
 
+```{r print_precision}
+precision(data)
+```
+
 Step 6:
-```{r}
+```{r sensitivity}
 sensitivity <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
   sensitivity <- cm$Freq[1]/(cm$Freq[1]+cm$Freq[3])
@@ -74,8 +94,12 @@ return(sensitivity)
 }
 ```
 
+```{r print_sensitivity}
+sensitivity(data)
+```
+
 Step 7:
-```{r}
+```{r specificity}
 specificity <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
   specificity <- cm$Freq[4]/(cm$Freq[4]+cm$Freq[2])
@@ -83,11 +107,19 @@ return(specificity)
 }
 ```
 
+```{r print_specificity}
+specificity(data)
+```
+
 Step 8:
-```{r}
+```{r f1_score}
 f1_score <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
-  f1_score <- (2 * precision * sensitivity) / (precision + sensitivity)
+  f1_score <- (2 * precision(df) * sensitivity(df)) / (precision(df) + sensitivity(df))
 return(f1_score)
 }
+```
+
+```{r f1_score_print}
+f1_score(data)
 ```
