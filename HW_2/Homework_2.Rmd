@@ -24,19 +24,6 @@ cm <- as.data.frame(table("Actual Class" = data$class, "Predicted Class" = data$
 kable(cm)
 ```
 
-Caret Package Metric Calculation:
-
-```{r caret_POW}
-car_cm = confusionMatrix(table("Actual Class" = data$class, "Predicted Class" = data$scored.class))
-```
-
-```{r print_caretbyclass}
-car_cm
-```
-
-```{r print_caretbyclass}
-car_cm$byClass
-```
 
 Step 3:
 ```{r accuracy}
@@ -122,4 +109,19 @@ return(f1_score)
 
 ```{r f1_score_print}
 f1_score(data)
+```
+
+
+Step 12:
+
+```{r caret_POW}
+car_cm = confusionMatrix(table("Actual Class" = data$class, "Predicted Class" = data$scored.class))
+```
+
+```{r print_caretbyclass}
+car_cm
+```
+
+```{r print_caretbyclass}
+car_cm$byClass
 ```
