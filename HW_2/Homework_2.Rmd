@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(knitr)
 library(caret)
+library(pROC)
 ```
 
 Step 1:
@@ -112,16 +113,60 @@ f1_score(data)
 ```
 
 
+Step 10:
+
+
+```{r ROC_Curve}
+
+ROC_Calc = function(x,y,...){
+  TPR_ROC = c()
+  FPR_ROC = c()
+  for (i in seq(0,1,.01)){
+    t_df = data.frame(class = x, scored.class = ifelse(y >= i,1,0),scored.probability=y)
+    TPR_ROC = c(TPR_ROC,sensitivity(t_df))
+    FPR_ROC = c(FPR_ROC,1 - specificity(t_df))
+  }
+  
+  t_df = data.frame(TPR_ROC,FPR_ROC)
+  t_df = t_df[complete.cases(t_df), ]
+  AUC = round(sum(t_df$TPR_ROC * c(diff(t_df$FPR_ROC),0)) 
+               + sum(c(diff(t_df$TPR_ROC),0) * c(diff(t_df$FPR_ROC),0))/2, 4)
+  
+  plot(FPR_ROC, TPR_ROC, 'l', ...)
+  grid (10,10, lty = 6, col = "lightgrey")
+  polygon(c(FPR_ROC, 1,1), c(TPR_ROC, 0, 1), col = 'deeppink4',density = 20, angle = 45)
+  polygon(c(0,0,1,1), c(0,1,1,0), col = 'black',density = 0, lty = 6)
+  abline(a=0,b=1)
+  legend(0.5,0.4, AUC, title = 'AUC')
+  return(paste0("AUC Score: ",AUC))
+}
+
+ROC_Calc(data$class,data$scored.probability,main = 'ROC Curve',
+         xlab = 'False Positive Rate',
+         ylab = 'True Positive Rate')
+
+```
+
 Step 12:
 
 ```{r caret_POW}
 car_cm = confusionMatrix(table("Actual Class" = data$class, "Predicted Class" = data$scored.class))
 ```
 
-```{r print_caretbyclass}
+```{r print_caretcm}
 car_cm
 ```
 
 ```{r print_caretbyclass}
 car_cm$byClass
+```
+
+Step 13:
+
+```{r pROC_Curve}
+par(mfrow= c(1,2))
+plot(pROC::roc(data$class,data$scored.probability), print.auc = TRUE, main = 'ROC Curve (pROC)')
+ROC_Calc(data$class,data$scored.probability,main = 'ROC Curve',
+         xlab = 'False Positive Rate',
+         ylab = 'True Positive Rate')
 ```
