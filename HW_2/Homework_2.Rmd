@@ -76,7 +76,7 @@ Step 5:
 ```{r precision}
 precision <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
-  precision <- cm$Freq[1]/(cm$Freq[1]+cm$Freq[2])
+  precision <- cm$Freq[1]/(cm$Freq[1]+cm$Freq[3])
 return(precision)
 }
 ```
@@ -89,7 +89,7 @@ Step 6:
 ```{r sensitivity}
 sensitivity <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
-  sensitivity <- cm$Freq[1]/(cm$Freq[1]+cm$Freq[3])
+  sensitivity <- cm$Freq[1]/(cm$Freq[1]+cm$Freq[2])
 return(sensitivity)
 }
 ```
@@ -102,7 +102,7 @@ Step 7:
 ```{r specificity}
 specificity <- function(df){
   cm <- as.data.frame(table("Actual Class" = df$class, "Predicted Class" = df$scored.class))
-  specificity <- cm$Freq[4]/(cm$Freq[4]+cm$Freq[2])
+  specificity <- cm$Freq[4]/(cm$Freq[4]+cm$Freq[3])
 return(specificity)
 }
 ```
