@@ -14,6 +14,7 @@ library(tidyverse)
 library(DataExplorer)
 library(knitr)
 library(psych)
+library(caret)
 ```
 
 # HOMEWORK 3
@@ -45,7 +46,7 @@ kable(summary)
 ```
 
 
-According to our summary statistics above, and our graph below, there are no missing values from our dataset.
+According to our summary statistics above, and our graph below, there are no missing values in our dataset.
 
 ```{r}
 missing_values <- training %>%
@@ -77,6 +78,7 @@ Let's make some obervations based on the histogram and boxplot of the variables 
 ```{r}
 plot_histogram(training)
 plot_boxplot(data = training, by = "target")
+
 ```
 
 
@@ -87,3 +89,25 @@ plot_correlation(training)
 ```
 
 It seems that "target" has a strong correlation with the variables "nox", "rad", "age", "tax" and "indus".
+
+
+# DATA PREPARATION
+
+
+# BUILDING MODELS
+
+Model with all predictor variables:
+
+```{r}
+model_1 <- glm(target ~., family = binomial(), data = training)
+summary(model_1)
+```
+
+Model with high collinearity between response and predictor variables:
+
+```{r}
+model_2 <- glm(target ~ nox + rad + age + tax + indus, family = binomial(), data = training)
+summary(model_2)
+```
+
+# SELECT MODELS
