@@ -1,0 +1,95 @@
+---
+title: "HW_3"
+author: "Hector Santana"
+date: "10/21/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(DataExplorer)
+library(knitr)
+library(psych)
+```
+
+# HOMEWORK 2
+
+Hector Santana, Zachary Safir, Mario Pena
+ 
+In this assignment we will explore, analyze and build a binary logistic regression model to predict wheter a particular neighborhood will be at risk for high crime levels. 
+
+We are provided with information on 466 neighborhoods, 12 predictor variables and 1 response variable. The response variable indicates whether the crime rate is above the median (1) or not (0).
+
+We first download the "training" and "evaluation" datasets from GitHub:
+
+```{r Data Importation}
+training <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-training-data_modified.csv", header=TRUE, sep=",")
+evaluation <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-evaluation-data_modified.csv", header=TRUE, sep=",")
+```
+
+# DATA EXPLORATION
+
+Below we have created a table with the summary statistics of our 12 predictor variables.
+
+```{r}
+summary <- describe(training[,c(1:12)])
+kable(summary)
+```
+
+
+According to our summary statistics above, and our graph below, there are no missing values from our dataset.
+
+```{r}
+missing_values <- training %>%
+  gather(key = "key", value = "val") %>%
+  mutate(isna = is.na(val)) %>%
+  group_by(key) %>%
+  mutate(total = n()) %>%
+  group_by(key, total, isna) %>%
+  summarise(num.isna = n()) %>%
+  mutate(pct = num.isna / total * 100)
+```
+
+```{r}
+percentage_plot <- missing.values %>%
+      ggplot() +
+        geom_bar(aes(x = reorder(key, desc(pct)), 
+                     y = pct, fill=isna), 
+                 stat = 'identity', alpha=0.8) +
+      scale_fill_manual(name = "", 
+                        values = c('steelblue', 'tomato3'), labels = c("Present", "Missing")) +
+      coord_flip() +
+      labs(title = "Percentage of missing values", x =
+             'Variable', y = "% of missing values")
+
+percentage_plot
+
+```
+
+
+We can also observe that the "target" variable is evenly distributed between the "1" and "0" responses.
+
+```{r}
+knitr::kable(table(training$target))
+```
+
+
+Let's make some obervations based on the histogram and boxplot of the variables in our data.
+
+```{r}
+plot_histogram(training)
+plot_boxplot(data = training, by = "target")
+```
+
+
+We can also observe the correlation of our variables with eachother on the next plot.
+
+```{r}
+plot_correlation(training)
+```
+
+It seems that "target" has a strong correlation with the variables "nox", "rad", "age", "tax" and "indus".
