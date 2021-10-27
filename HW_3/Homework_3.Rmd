@@ -16,7 +16,7 @@ library(knitr)
 library(psych)
 ```
 
-# HOMEWORK 2
+# HOMEWORK 3
 
 Hector Santana, Zachary Safir, Mario Pena
  
