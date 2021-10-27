@@ -28,8 +28,12 @@ We first download the "training" and "evaluation" datasets from GitHub:
 
 ```{r Data Importation}
 training <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-training-data_modified.csv", header=TRUE, sep=",")
+
 evaluation <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-evaluation-data_modified.csv", header=TRUE, sep=",")
+
+training[,c("chas","target")] <- lapply(training[,c("chas","target")],factor)
 ```
+
 
 # DATA EXPLORATION
 
