@@ -49,29 +49,19 @@ According to our summary statistics above, and our graph below, there are no mis
 
 ```{r}
 missing_values <- training %>%
-  gather(key = "key", value = "val") %>%
+  mutate(id = row_number()) %>%
+  gather(-id, key = "key", value = "val") %>%
   mutate(isna = is.na(val)) %>%
-  group_by(key) %>%
-  mutate(total = n()) %>%
-  group_by(key, total, isna) %>%
-  summarise(num.isna = n()) %>%
-  mutate(pct = num.isna / total * 100)
-```
+  ggplot(aes(key, id, fill = isna)) +
+    geom_raster(alpha=0.8) +
+    scale_fill_manual(name = "",
+        values = c('steelblue', 'tomato3'),
+        labels = c("Present", "Missing")) +
+    labs(x = "Variable",
+           y = "Row Number", title = "Missing Values in Rows") +
+    coord_flip()
 
-```{r}
-percentage_plot <- missing.values %>%
-      ggplot() +
-        geom_bar(aes(x = reorder(key, desc(pct)), 
-                     y = pct, fill=isna), 
-                 stat = 'identity', alpha=0.8) +
-      scale_fill_manual(name = "", 
-                        values = c('steelblue', 'tomato3'), labels = c("Present", "Missing")) +
-      coord_flip() +
-      labs(title = "Percentage of missing values", x =
-             'Variable', y = "% of missing values")
-
-percentage_plot
-
+missing_values
 ```
 
 
