@@ -15,6 +15,8 @@ library(DataExplorer)
 library(knitr)
 library(psych)
 library(caret)
+library(gridExtra)
+library(geoR)
 ```
 
 # HOMEWORK 3
@@ -66,10 +68,10 @@ missing_values
 ```
 
 
-We can also observe that the "target" variable is evenly distributed between the "1" and "0" responses.
+We can also observe that the "target" variable is evenly distributed between the "0" and "1" responses.
 
 ```{r}
-knitr::kable(table(training$target))
+prop.table(table(training$target))
 ```
 
 
@@ -93,21 +95,107 @@ It seems that "target" has a strong correlation with the variables "nox", "rad",
 
 # DATA PREPARATION
 
+Our data looks relatively clean and it doesn't seem there is much need to do any modifications. However, we do have predictor variables that are skewed or do not follow a normal distribution. We can make use of a Box cox function in order to figure out what is the best transformation that can be applied to these variables in order to normalize them.
+
+A few of the variables that seem skewed or don't follow a normal distribution include: "age", "dis", "indus", "lstat", "nox", "ptratio", "rad" and "tax". 
+
+We will use the "boxcoxfit" function from the "geoR" package to extract the fitted parameters and use the value of lambda for the transformations of each of the variables mentioned above.
+
+Please note that "ptratio" has a lambda of 4.14, which is larger than the suggested highest value of 2 for transformations, thus we will not be transforming this variable.
+
+```{r}
+boxcoxfit(training$age)
+boxcoxfit(training$dis)
+boxcoxfit(training$indus)
+boxcoxfit(training$lstat)
+boxcoxfit(training$nox)
+boxcoxfit(training$ptratio)
+boxcoxfit(training$rad)
+boxcoxfit(training$tax)
+```
+
+```{r}
+age_tr <- ggplot(training, aes(age^1.32)) + geom_histogram(fill = 'gray', binwidth = 50, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Age Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+
+dis_tr <- ggplot(training, aes(dis^-0.15)) + geom_histogram(fill = 'gray', binwidth = 0.05, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Dis Transformed') + theme(plot.title = element_text(hjust = 0.5))  
+
+
+indus_tr <- ggplot(training, aes(indus^0.44)) + geom_histogram(fill = 'gray', binwidth = 0.25, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Indus Transformed') + theme(plot.title = element_text(hjust = 0.5))  
+
+
+lstat_tr <- ggplot(training, aes(lstat^0.23)) + geom_histogram(fill = 'gray', binwidth = 0.2, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Lstat Transformed') + theme(plot.title = element_text(hjust = 0.5)) 
+
+
+nox_tr <- ggplot(training, aes(nox^-0.95)) + geom_histogram(fill = 'gray', binwidth = 0.2, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Nox Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+
+rad_tr <- ggplot(training, aes(rad^-0.16)) + geom_histogram(fill = 'gray', binwidth = 0.1, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Rad Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+
+tax_tr <- ggplot(training, aes(tax^-0.5)) + geom_histogram(fill = 'gray', binwidth = 0.01, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Tax Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+
+grid.arrange(age_tr, dis_tr, indus_tr, lstat_tr, nox_tr, rad_tr, tax_tr, ncol=3, nrow=3)
+```
 
 # BUILDING MODELS
+
+Given that the dataset we are working with is fairly small, we will use a K-Fold Cross Validation technique to split our data into an additional training and test set in order to use 80% of it in the models and then evaluate their performance with the predictions against the remaining 20%.
+
+```{r partition}
+set.seed(120)
+train_index <- createDataPartition(training$target, p=.8, list=FALSE, times = 1)
+additional_train <- training[train_index,]
+additional_test <- training[-train_index,]
+```
 
 Model with all predictor variables:
 
 ```{r}
-model_1 <- glm(target ~., family = binomial(), data = training)
+model_1 <- train(target ~., data = additional_train, 
+              method = "glm", family = "binomial",
+              trControl = trainControl(
+                  method = "cv", number = 10,
+                  savePredictions = TRUE),
+              tuneLength = 5, 
+              preProcess = c("center", "scale"))
 summary(model_1)
 ```
 
 Model with high collinearity between response and predictor variables:
 
 ```{r}
-model_2 <- glm(target ~ nox + rad + age + tax + indus, family = binomial(), data = training)
+model_2 <- train(target ~ nox + rad + age + tax + indus, data = additional_train, 
+              method = "glm", family = "binomial",
+              trControl = trainControl(
+                  method = "cv", number = 10,
+                  savePredictions = TRUE),
+              tuneLength = 5, 
+              preProcess = c("center", "scale"))
 summary(model_2)
 ```
+
+Model with transformed variables:
+
+```{r}
+model_3 <- train(target ~ zn + I(indus^0.44) + chas + I(nox^-0.95) + rm + I(age^1.32) + I(dis^-0.15) + I(rad^-0.16) + I(tax^-0.5) + ptratio + I(lstat^0.23) + medv, data = additional_train, 
+              method = "glm", family = "binomial",
+              trControl = trainControl(
+                  method = "cv", number = 10,
+                  savePredictions = TRUE),
+              tuneLength = 5, 
+              preProcess = c("center", "scale"))
+summary(model_3)
+```
+
+
 
 # SELECT MODELS
