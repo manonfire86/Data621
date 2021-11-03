@@ -1,0 +1,162 @@
+---
+title: "Untitled"
+author: "Zachary Safir"
+date: "10/27/2021"
+output: 
+  pdf_document:
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=F,warning = F,message = F,comment=NA)
+```
+
+
+```{r}
+pacman::p_load(tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car)
+```
+
+
+
+```{r}
+data <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-training-data_modified.csv")
+```
+
+```{r}
+head(data)
+```
+
+
+
+```{r}
+sapply(data, class)
+```
+
+
+```{r}
+data[,c("chas","target")] <- lapply(data[,c("chas","target")],factor)
+
+sapply(data, class )
+```
+
+```{r}
+head(data)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+plot_histogram(data)
+```
+
+
+```{r}
+plot_boxplot(data,by="target")
+```
+
+```{r}
+ggplot(data,aes(x=ptratio,y=ptratio,color=target)) + geom_jitter()
+
+```
+
+
+
+
+```{r}
+ggplot(data,aes(x=rad,y=rad,color=target)) + geom_jitter()
+```
+
+
+
+```{r}
+summary(data)
+```
+
+```{r}
+summary(target~.,data)
+```
+```{r}
+summary(tableby(target~.,data))
+```
+
+
+
+
+```{r}
+data %>%   
+gather() %>%
+  group_by(key) %>%
+  summarise(na_sum= sum(is.na(value)) ,  perc_miss  = sum(is.na(value)/n()) )
+``` 
+
+
+```{r}
+plot_missing(data)
+```
+
+
+```{r}
+var = colnames(select(data,!c("target","chas")))
+
+
+for (val in var){
+ marginalModelPlots (glm(reformulate(val,"target"),data,family = binomial(link = "logit")))
+}
+```
+
+
+
+
+
+
+
+```{r}
+ residualPlots (lm(reformulate("target","(ptratio)"),data,family = binomial(link = "logit")) )
+
+```
+
+
+```{r}
+ mmps (glm(reformulate("log2(rm)","target"),data,family = binomial(link = "logit")) )
+
+```
+
+
+```{r}
+model0 <- glm(target~ zn+indus+nox+age+dis+rad+tax +lstat,data,family = binomial(link = "logit")) 
+mmps (model0 ,span = 3/4)
+```
+
+
+```{r}
+model1 <- glm(target~ (rm)+ (ptratio)+(medv),data,family = binomial(link = "logit")) 
+mmps (model1 ,span = 3/4)
+ 
+```
+
+
+
+```{r}
+model2 <- glm(target~ log(rm)+ log(ptratio)+log(medv),data,family = binomial(link = "logit")) 
+mmps (model2 ,span = 3/4)
+ 
+```
+
+```{r}
+ mmps (brglm(reformulate("(ptratio)^2","target"),data,family = binomial,span = 3/4 ))
+
+
+reformulate("(ptratio)^2","target")
+```
+  
