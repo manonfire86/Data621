@@ -5,26 +5,83 @@ date: "10/21/2021"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# Library Loading
+
+```{r warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(data.table)
+library(VIM)
+library(mice)
+library(Rcpp)
+library(corrplot)
+library(stats)
+library(rstatix)
+library(DataExplorer)
+library(caret)
+library(psych)
+library(janitor)
+library(DMwR)
 ```
 
-## R Markdown
+# Data Exploration
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r Data_Importation}
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+eval_data = read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-evaluation-data_modified.csv")
 
-```{r cars}
-summary(cars)
+training_data = read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-training-data_modified.csv")
+
 ```
 
-## Including Plots
+```{r Data_Exploration}
 
-You can also embed plots, for example:
+## Initial Analysis of data structures
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+head(eval_data,5)
+
+head(training_data,5)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r Data_Exploration_2}
+
+## Initial Analysis of data structures (cont'd)
+
+str(eval_data)
+str(training_data)
+
+```
+```{r Data_Exploration_3}
+
+## Data Set Comparison
+
+list(training_data,eval_data) %>% compare_df_cols() %>% `colnames<-`(c('Column Name', 'Training', 'Evaluation'))
+```
+
+
+```{r Data_Exporation_4}
+training_data  %>% describe()
+```
+
+```{r Data_Exploration_5}
+
+training_data  %>% plot_histogram()
+training_data %>% plot_density()
+training_data %>% plot_boxplot(by="target")
+
+```
+```{r Data_Exploration_6}
+training_data  %>% plot_missing()
+training_data  %>% gather(variable, value) %>% filter(value == 0) %>% 
+  group_by(variable) %>% tally() %>% mutate(percent = n / nrow(training) * 100) %>%
+  mutate(percent = paste0(round(percent, ifelse(percent < 10, 1, 0)), "%")) %>%
+  arrange(desc(n)) %>% rename(`Variable With Zeros` = variable, 
+                              `Number of Records` = n,
+                              `Share of Total` = percent)
+```
+
+
+# Data Preparation
+
