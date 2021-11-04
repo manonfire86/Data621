@@ -26,6 +26,13 @@ library(DMwR)
 library(knitr)
 library(gridExtra)
 library(geoR)
+library(knitr)
+library(grid)
+library(gridExtra)
+library(lmtest)
+library(pscl)
+library(MKmisc)
+library(ROCR)
 ```
 
 # HOMEWORK 3
@@ -68,6 +75,7 @@ str(eval_data)
 str(training_data)
 
 ```
+
 ```{r Data_Exploration_3}
 
 ## Data Set Comparison
@@ -82,23 +90,7 @@ summary <- describe(training_data[,c(1:12)])
 kable(summary)
 ```
 
-According to our summary statistics above, and our graph below, there are no missing values in our dataset.
 
-```{r}
-missing_values <- training_data %>%
-  mutate(id = row_number()) %>%
-  gather(-id, key = "key", value = "val") %>%
-  mutate(isna = is.na(val)) %>%
-  ggplot(aes(key, id, fill = isna)) +
-    geom_raster(alpha=0.8) +
-    scale_fill_manual(name = "",
-        values = c('steelblue', 'tomato3'),
-        labels = c("Present", "Missing")) +
-    labs(x = "Variable",
-           y = "Row Number", title = "Missing Values in Rows") +
-    coord_flip()
-missing_values
-```
 
 We can also observe that the "target" variable is evenly distributed between the "0" and "1" responses.
 
@@ -115,10 +107,12 @@ training_data %>% plot_density()
 training_data %>% plot_boxplot(by="target")
 
 ```
+
+
 ```{r Data_Exploration_7}
 training_data  %>% plot_missing()
 training_data  %>% gather(variable, value) %>% filter(value == 0) %>% 
-  group_by(variable) %>% tally() %>% mutate(percent = n / nrow(training) * 100) %>%
+  group_by(variable) %>% tally() %>% mutate(percent = n / nrow(training_data) * 100) %>%
   mutate(percent = paste0(round(percent, ifelse(percent < 10, 1, 0)), "%")) %>%
   arrange(desc(n)) %>% rename(`Variable With Zeros` = variable, 
                               `Number of Records` = n,
@@ -131,8 +125,8 @@ We can also observe the correlation of our variables with eachother on the next 
 plot_correlation(training_data)
 ```
 
-It seems that "target" has a strong correlation with the variables "nox", "rad", "age", "tax" and "indus".
-
+It seems that "target_1" has a strong correlation with the variables "nox", "rad", "age", "tax" and "indus".
+Target_0 has the inverse relationship for these same variables.
 
 # DATA PREPARATION
 
@@ -226,4 +220,98 @@ summary(model_3)
 
 
 # SELECT MODELS
+
+First we need to measure performance of the models prior to selection.
+
+```{r model_perf_diagnostics}
+
+plot(model_1$finalModel)
+plot(model_2$finalModel)
+plot(model_3$finalModel)
+```
+
+
+```{r model_pred_results}
+
+results_model_one = predict(model_1,newdata = additional_test)
+results_model_two = predict(model_2,newdata = additional_test)
+results_model_three = predict(model_3,newdata = additional_test)
+
+results_model_one_prob = predict(model_1,newdata = additional_test,type = 'prob')
+results_model_two_prob = predict(model_2,newdata = additional_test,type = 'prob')
+results_model_three_prob = predict(model_3,newdata = additional_test,type = 'prob')
+
+
+
+confusionMatrix(data=results_model_one, additional_test$target)
+confusionMatrix(data=results_model_two, additional_test$target)
+confusionMatrix(data=results_model_three, additional_test$target)
+
+
+```
+
+```{r model_config_perf}
+mod_fit1 = glm(target ~., data = additional_train, family = "binomial")
+mod_fit2 = glm(target ~ nox + rad + age + tax + indus, data = additional_train, family = "binomial")
+mod_fit3 = glm(target ~ zn + I(indus^0.44) + chas + I(nox^-0.95) + rm + I(age^1.32) + I(dis^-0.15) + I(rad^-0.16) + I(tax^-0.5) + ptratio + I(lstat^0.23) + medv, data = additional_train, family = "binomial")
+```
+
+
+```{r model_perf_analy}
+
+# anova analysis
+anova(mod_fit1,mod_fit2,mod_fit3)
+
+# Goodness of fit tests
+
+anova(mod_fit1,mod_fit2,mod_fit3, test ="Chisq")
+
+
+## Likelihood Ratio
+
+lrtest(mod_fit1,mod_fit2,mod_fit3)
+
+# Psuedo R^2
+
+pR2(mod_fit1)
+pR2(mod_fit2)
+pR2(mod_fit3)
+
+# Hosmer-Lemeshow Test
+
+HLgof.test(fit = fitted(mod_fit1), obs = additional_train$target)
+HLgof.test(fit = fitted(mod_fit2), obs = additional_train$target)
+HLgof.test(fit = fitted(mod_fit3), obs = additional_train$target)
+
+prob_one <- predict(mod_fit1, newdata=additional_test, type="response")
+pred_one <- prediction(prob_one, additional_test$target)
+perf_one <- performance(pred_one, measure = "tpr", x.measure = "fpr")
+plot(perf_one)
+auc_mod1 <- performance(pred_one, measure = "auc")
+auc_mod1 <- auc_mod1@y.values[[1]]
+auc_mod1
+
+
+prob_two <- predict(mod_fit2, newdata=additional_test, type="response")
+pred_two <- prediction(prob_two, additional_test$target)
+perf_two <- performance(pred_two, measure = "tpr", x.measure = "fpr")
+plot(perf_two)
+auc_mod2 <- performance(pred_two, measure = "auc")
+auc_mod2 <- auc_mod2@y.values[[1]]
+auc_mod2
+
+prob_three <- predict(mod_fit3, newdata=additional_test, type="response")
+pred_three <- prediction(prob_three, additional_test$target)
+perf_three <- performance(pred_three, measure = "tpr", x.measure = "fpr")
+plot(perf_three)
+auc_mod3 <- performance(pred_three, measure = "auc")
+auc_mod3 <- auc_mod3@y.values[[1]]
+auc_mod3
+
+
+
+```
+
+
+
 
