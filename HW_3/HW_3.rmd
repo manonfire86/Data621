@@ -33,6 +33,7 @@ library(lmtest)
 library(pscl)
 library(MKmisc)
 library(ROCR)
+library(survey)
 ```
 
 # HOMEWORK 3
@@ -256,6 +257,19 @@ mod_fit2 = glm(target ~ nox + rad + age + tax + indus, data = additional_train, 
 mod_fit3 = glm(target ~ zn + I(indus^0.44) + chas + I(nox^-0.95) + rm + I(age^1.32) + I(dis^-0.15) + I(rad^-0.16) + I(tax^-0.5) + ptratio + I(lstat^0.23) + medv, data = additional_train, family = "binomial")
 ```
 
+```{r model_sel_support}
+
+# wholistic model
+varImp(mod_fit1)
+
+# transformed wholistic model
+varImp(mod_fit3)
+
+# test lowest two important variables
+regTermTest(mod_fit1, "indus")
+regTermTest(mod_fit1, "rm")
+
+```
 
 ```{r model_perf_analy}
 
