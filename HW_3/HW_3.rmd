@@ -40,7 +40,7 @@ library(survey)
 
 Hector Santana, Zachary Safir, Mario Pena
  
-In this assignment we will explore, analyze and build a binary logistic regression model to predict wheter a particular neighborhood will be at risk for high crime levels. 
+In this assignment we will explore, analyze and build a binary logistic regression model to predict whether a particular neighborhood will be at risk for high crime levels. 
 
 We are provided with information on 466 neighborhoods, 12 predictor variables and 1 response variable. The response variable indicates whether the crime rate is above the median (1) or not (0).
 
@@ -137,7 +137,7 @@ A few of the variables that seem skewed or don't follow a normal distribution in
 
 We will use the "boxcoxfit" function from the "geoR" package to extract the fitted parameters and use the value of lambda for the transformations of each of the variables mentioned above.
 
-Please note that "ptratio" has a lambda of 4.14, which is larger than the suggested highest value of 2 for transformations, thus we will not be transforming this variable.
+Please note that "ptratio" has a lambda of 4.14, which is outside of the suggested range of -2 to 2 for transformations, thus we will not be transforming this variable.
 
 ```{r}
 boxcoxfit(training_data$age)
@@ -170,7 +170,7 @@ grid.arrange(age_tr, dis_tr, indus_tr, lstat_tr, nox_tr, rad_tr, tax_tr, ncol=3,
 
 # BUILDING MODELS
 
-Given that the dataset we are working with is fairly small, we will use a K-Fold Cross Validation technique to split our data into an additional training and test set in order to use 80% of it in the models and then evaluate their performance with the predictions against the remaining 20%.
+Given that the dataset we are working with is fairly small, we will use a K-Fold Cross Validation technique to train the models. Additionally, we will split our data into an additional training and test set in order to use 80% of it in the models and then evaluate their performance with the predictions against the remaining 20%.
 
 ```{r partition}
 set.seed(120)
@@ -233,7 +233,6 @@ plot(model_3$finalModel)
 
 
 ```{r model_pred_results}
-
 results_model_one = predict(model_1,newdata = additional_test)
 results_model_two = predict(model_2,newdata = additional_test)
 results_model_three = predict(model_3,newdata = additional_test)
@@ -247,8 +246,6 @@ results_model_three_prob = predict(model_3,newdata = additional_test,type = 'pro
 confusionMatrix(data=results_model_one, additional_test$target)
 confusionMatrix(data=results_model_two, additional_test$target)
 confusionMatrix(data=results_model_three, additional_test$target)
-
-
 ```
 
 ```{r model_config_perf}
@@ -321,8 +318,6 @@ plot(perf_three)
 auc_mod3 <- performance(pred_three, measure = "auc")
 auc_mod3 <- auc_mod3@y.values[[1]]
 auc_mod3
-
-
 
 ```
 
