@@ -1,0 +1,502 @@
+---
+title: "Data 621 Homework Three"
+author: "Zachary Safir,Mario Pena,Hector Santana"
+date: "10/27/2021"
+output: 
+  pdf_document:
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=F,warning = F,message = F,comment=NA,echo=F)
+```
+
+
+```{r}
+pacman::p_load(tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,geoR,caret,
+               psych,gridExtra,DMwR2,lmtest,pscl,MKmisc,ROCR,survey,stats,rstatix,Rcpp,
+               corrplot,forecast,cowplot)
+
+
+```
+
+
+\pagebreak
+
+
+# Introduction
+
+ 
+|   In this assignment we will explore, analyze and build a binary logistic regression model to predict wheter a particular neighborhood will be at risk for high crime levels. 
+
+|   We are provided with information on 466 neighborhoods, 12 predictor variables and 1 response variable. The response variable indicates whether the crime rate is above the median (1) or not (0).
+
+
+
+```{r}
+eval_data <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-training-data_modified.csv")
+
+training_data = read_csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_3/crime-training-data_modified.csv")
+
+training_data[,c("chas","target")] <- lapply(training_data[,c("chas","target")],factor)
+
+
+```
+
+
+
+
+# Data Exploration
+|   Below we have created a table with the summary statistics of our 12 predictor variables.
+|   We ran a summary statistic analysis to determine if there were existing outliers, skew, and kurtosis in the data. The preliminary consensus was that the following variables showed skew, kurtosis, and outliers: "age", "dis", "indus", "lstat", "nox" ,"ptratio," "rad", "tax".
+
+|   We can also observe that the "target" variable is roughly evenly distributed between the "0" and "1" responses.However, our variable chas has way too few 1 observations. It seems that will have to drop that value from consideration due to this. 
+
+```{r,eval=F}
+my_controls <- tableby.control(
+  numeric.stats = c("meansd", "medianq1q3", "range","Nmiss"), 
+  test = F,
+  digits=2
+)
+
+kable(summary(tableby(target~.,training_data, control = my_controls),text=T),format="latex",booktabs = TRUE)  %>% 
+  kable_styling(full_width = F)
+
+```
+
+
+
+```{r,fig.align="center",out.width="250%"}
+
+ggdraw() + draw_image("https://i.gyazo.com/c3e956945e715811d37693e1b90598c1.png")
+```
+
+
+
+\newpage
+
+
+|   The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we then constructed visual representations consisting of density plots, histograms, and boxplots.
+
+
+
+```{r}
+plot_histogram(training_data)
+```
+
+
+```{r}
+plot_density(training_data)
+```
+
+
+```{r}
+plot_boxplot(training_data,by="target")
+```
+
+
+
+|   We have quite a few variables that are skewed or not normally distributed based on our plots above. We will have to do some type of transformation for some of the variables if we would like to include them in our models.
+
+|   Additionally, according to our summary statistics above, and our graph below, there are no missing values in our dataset.
+
+\newpage  
+
+|   We note that our data has no missing values, and even upon further inspections, we find no obvious looking erroneous values in our data. 
+
+```{r}
+plot_missing(training_data)
+```
+
+\pagebreak
+
+|   We can also observe the correlation of our variables with eachother on the next plot.
+
+
+```{r Data_Exploration_8}
+plot_correlation(training_data)
+```
+
+|   It seems that "target_1" has a strong correlation with the variables "nox", "rad", "age", "tax" and "indus". Target_0 has the inverse relationship for these same variables.
+
+|   Additionally, it seems that "target_1" has a strong correlation with the variables "nox", "rad", "age", "tax" and "indus", whileTarget_0 has the inverse relationship for these same variables.
+We also notice that there are some strong correlations between our predictor variables, possibly indicating a multicollinearity issue. Looking at the VIF scores, we can determine that the "medv" variable is redundant and can be removed from our data. Doing so lowers the VIF values for many of our predictors.
+
+
+
+```{r, results='asis'}
+t1 <- kable((vif(glm((target) ~. , training_data,family = binomial ))) , format = 'latex', col.names = c("VIF Score"))  
+
+
+t2 <-kable((vif(glm(target ~. -medv,data = training_data,family=binomial))), format = 'latex', col.names = c("VIF Score"))  
+
+
+cat(c("\\begin{table}[!htb]
+    \\begin{minipage}{.5\\linewidth}
+      \\centering",
+        t1,
+    "\\end{minipage}%
+    \\begin{minipage}{.5\\linewidth}
+      \\centering",
+        t2,
+    "\\end{minipage} 
+\\end{table}"
+))  
+
+```
+
+
+
+```{r}
+training_data <- select(training_data,!c("chas","medv"))
+```
+
+
+
+\newpage
+
+
+# Data Preparation
+
+|   After the data exploration phase was completed, we transitioned into preparing the data for our regression models.
+
+|   Our data looks relatively clean and it doesn't seem there is much need to do any modifications. However, we do have predictor variables that are skewed or do not follow a normal distribution. We can make use of both the log and  the Box cox function in order to figure out what is the best transformation that can be applied to these variables in order to normalize them.
+
+|   A few of the variables that seem skewed or don't follow a normal distribution include: "age", "dis", "indus", "lstat", "nox", "ptratio", and "rad".
+
+|   We will use the "boxcoxfit" function from the "geoR"  and " forecast" package to extract the fitted parameters and use the value of lambda for the transformations of each of the variables mentioned above. We will then use 
+
+
+```{r}
+pt_lam <- boxcoxfit(training_data$ptratio)$lambda[1]
+
+training_data$lam_pt <- BoxCox(training_data$ptratio,pt_lam) 
+
+pt_nox <- boxcoxfit(training_data$nox)$lambda[1]
+training_data$lam_nox <- BoxCox(training_data$nox,pt_nox) 
+
+pt_age  <- boxcoxfit(training_data$age)$lambda[1]
+training_data$lam_age <- BoxCox(training_data$age,pt_age)
+
+pt_dis <-  boxcoxfit(training_data$dis)$lambda[1]
+training_data$lam_dis <- BoxCox(training_data$dis,pt_dis)
+
+pt_rad <- boxcoxfit(training_data$rad)$lambda[1]
+training_data$lam_rad <- BoxCox(training_data$rad,pt_rad)
+
+
+pt_tax <- boxcoxfit(training_data$tax)$lambda[1]
+training_data$lam_tax <- BoxCox(training_data$tax,pt_tax)
+
+
+pt_lstat<- boxcoxfit(training_data$lstat)$lambda[1]
+training_data$lam_lstat <- BoxCox(training_data$lstat,pt_lstat)
+
+
+pt_indus<- boxcoxfit(training_data$indus)$lambda[1]
+training_data$lam_indus <- BoxCox(training_data$indus,pt_indus)
+```
+
+
+|   Below, we can observe that even after transforming the variables, some of them do not follow a nearly normal distribution still, but we were at least able to bring them closer to normalization
+
+```{r}
+age_tr <- ggplot(training_data, aes(lam_age)) + geom_histogram(fill = 'gray', binwidth = 50, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Age Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+dis_tr <- ggplot(training_data, aes(lam_dis)) + geom_histogram(fill = 'gray', binwidth = 0.05, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Dis Transformed') + theme(plot.title = element_text(hjust = 0.5))  
+
+indus_tr <- ggplot(training_data, aes(lam_indus)) + geom_histogram(fill = 'gray', binwidth = 0.25, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Indus Transformed') + theme(plot.title = element_text(hjust = 0.5))  
+
+lstat_tr <- ggplot(training_data, aes(lam_lstat)) + geom_histogram(fill = 'gray', binwidth = 0.2, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Lstat Transformed') + theme(plot.title = element_text(hjust = 0.5)) 
+
+nox_tr <- ggplot(training_data, aes(lam_nox)) + geom_histogram(fill = 'gray', binwidth = 0.2, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Nox Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+rad_tr <- ggplot(training_data, aes(lam_rad)) + geom_histogram(fill = 'gray', binwidth = 0.1, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Rad Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+tax_tr <- ggplot(training_data, aes(lam_tax)) + geom_histogram(fill = 'gray', binwidth = 0.01, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of Tax Transformed') + theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(age_tr, dis_tr, indus_tr, lstat_tr, nox_tr, rad_tr, tax_tr, ncol=3, nrow=3)
+
+```
+
+
+\newpage
+
+|   We can also observe the marginal model plots below, which show us how well our data fits with our logistic model. We can see that, some of our variables in  our data do not fit well with the model, such as "indus", "rm", and "ptrartio". We will try using log and Box Croft to see if we can make the badly performing predictors fit the model better.
+
+
+```{r}
+var = colnames(select(training_data,!c("target")))
+
+
+for (val in var){
+ marginalModelPlots (glm(reformulate(val,"target"),training_data,family = binomial(link = "logit")))
+}
+```
+
+\newpage
+
+|   For "ptratio", we can see below that the log transformation does nothing, while the boxcoxfit only marginally improves the fit.
+
+```{r}
+lam <- boxcoxfit(training_data$ptratio)$lambda[1]
+
+
+mmps ( glm(target~ BoxCox(training_data$ptratio,lam)^4,training_data,family = binomial(link = "logit")))
+
+mmps ( glm(target~ log(ptratio),training_data,family = binomial(link = "logit")) )
+
+```
+
+\newpage 
+
+|   For "indus", both Box Croft and log improves the fit 
+
+
+```{r}
+lam2 <- boxcoxfit(training_data$indus)$lambda[1]
+
+
+mmps ( glm(target~ BoxCox(training_data$indus,lam2),training_data,family = binomial(link = "logit")))
+
+mmps ( glm(target~ log(indus),training_data,family = binomial(link = "logit")) )
+```
+
+
+
+
+
+\newpage
+
+# Building Models
+
+|   Following the data preparation phase, we brainstormed how best to construct an appropriate model design process. Given that the dataset we are working with is fairly small, we used a K-Fold Cross Validation technique to train the models. Additionally, we split our data into an additional training and test set in order to use 80% of it in the models and then evaluate their performance with the predictions against the remaining 20%. 
+
+|   Using the partition, we constructed a saturated regression model which contained all variables of the dataset. This gave us a starting point to analyze the statistical significance of each variable and their associated correlations to the dependent variable.
+
+
+```{r partition}
+set.seed(120)
+train_index <- createDataPartition(training_data$target, p=.8, list=FALSE, times = 1)
+additional_train <- training_data[train_index,]
+additional_test <- training_data[-train_index,]
+```
+
+|   Our first model includes all predictor variables including the transformations we created earlier.
+
+
+
+```{r}
+model_1 <- train(target ~., data = additional_train, 
+              method = "glm", family = "binomial",
+              trControl = trainControl(
+                  method = "cv", number = 10,
+                  savePredictions = TRUE),
+              tuneLength = 5, 
+              preProcess = c("center", "scale"))
+summary(model_1)
+ 
+ 
+```
+
+\newpage
+
+|   For our second model, we have chosen the variables with high collinearity between the response and predictor variables and take the log on some variables:
+
+```{r}
+model_2 <- train(target ~nox + rad + age + tax + log(indus) , data = additional_train, 
+              method = "glm", family = "binomial",
+              trControl = trainControl(
+                  method = "cv", number = 10,
+                  savePredictions = TRUE),
+              tuneLength = 5, 
+              preProcess = c("center", "scale"))
+summary(model_2)
+```
+
+
+\newpage
+
+|   In our final mode, we mix and match transformations, and include some normal values as well. We determined the values below by process of elimination, removing the intercepts with low significant values while watching the AIC score change. The best combination was found below. 
+
+```{r}
+model_3 <- train(target~.  -rm -rad -nox  -zn -lam_rad -lam_nox -lam_indus -dis - lam_dis -lam_age -age  + I(zn^2) + I(rad^2) + I(ptratio^2)   +I(ptratio^4) , data = additional_train, 
+              method = "glm", family = "binomial",
+              trControl = trainControl(
+                  method = "cv", number = 10,
+                  savePredictions = TRUE),
+              tuneLength = 5, 
+              preProcess = c("center", "scale"))
+summary(model_3)
+```
+
+
+
+\newpage
+
+
+
+# Selecting a Model
+
+
+
+```{r}
+results_model_one = predict(model_1,newdata = additional_test)
+results_model_two = predict(model_2,newdata = additional_test)
+results_model_three = predict(model_3,newdata = additional_test)
+```
+
+
+
+ 
+```{r model_config_perf}
+mod_fit1 = glm(target ~., data = additional_train, family = binomial)
+
+mod_fit2 = glm(target ~ nox + rad + age + tax + indus, data = additional_train, family = binomial)
+
+mod_fit3 = glm(target ~. -rm -rad -nox  -zn -lam_rad -lam_nox -dis - lam_dis -lam_age -age  + I(zn^2) + I(rad^2) + I(ptratio^2)   +I(ptratio^4)  , data = additional_train, family = binomial)
+
+
+```
+
+
+
+
+|   In selecting the best model, first we need to measure performance of the models prior to selection. We can do so by looking at the confusion matrix and AUC curve for our models. For the first model we have:
+
+
+```{r}
+confusionMatrix(data=results_model_one, additional_test$target)
+
+```
+
+
+```{r}
+prob_one <- predict(mod_fit1, newdata=additional_test, type="response")
+pred_one <- prediction(prob_one, additional_test$target)
+perf_one <- performance(pred_one, measure = "tpr", x.measure = "fpr")
+plot(perf_one)
+auc_mod1 <- performance(pred_one, measure = "auc")
+auc_mod1 <- auc_mod1@y.values[[1]]
+```
+
+
+\newpage
+
+|   Model Two
+
+
+```{r}
+confusionMatrix(data=results_model_two, additional_test$target)
+```
+
+```{r}
+prob_two <- predict(mod_fit2, newdata=additional_test, type="response")
+pred_two <- prediction(prob_two, additional_test$target)
+perf_two <- performance(pred_two, measure = "tpr", x.measure = "fpr")
+plot(perf_two)
+auc_mod2 <- performance(pred_two, measure = "auc")
+auc_mod2 <- auc_mod2@y.values[[1]]
+```
+
+
+
+\newpage 
+
+|   Model Three:
+
+```{r}
+confusionMatrix(data=results_model_three, additional_test$target) 
+```
+
+
+
+```{r}
+prob_three <- predict(mod_fit3, newdata=additional_test, type="response")
+pred_three <- prediction(prob_three, additional_test$target)
+perf_three <- performance(pred_three, measure = "tpr", x.measure = "fpr")
+plot(perf_three)
+auc_mod3 <- performance(pred_three, measure = "auc")
+auc_mod3 <- auc_mod3@y.values[[1]]
+```
+
+\newpage 
+
+# Evaluation
+
+|   Analyzing the three model results, we determined that model three has the best predictive power and represents the strongest relationship to underlying data. The applied data transformations helped adjust for underlying skews and multicollinearity in the data. It also has near perfect AUC representing the strong predictive nature of the model.
+
+|   We will now use that model on our evaluation data and create predictions with it. Shown below are the results of doing so. We note that our results closely resemble the distributions found in our training data.
+
+```{r eval-trans}
+pt_lam <- boxcoxfit(eval_data$ptratio)$lambda[1]
+
+eval_data$lam_pt <- BoxCox(eval_data$ptratio,pt_lam) 
+
+pt_nox <- boxcoxfit(eval_data$nox)$lambda[1]
+eval_data$lam_nox <- BoxCox(eval_data$nox,pt_nox) 
+
+pt_age  <- boxcoxfit(eval_data$age)$lambda[1]
+eval_data$lam_age <- BoxCox(eval_data$age,pt_age)
+
+pt_dis <-  boxcoxfit(eval_data$dis)$lambda[1]
+eval_data$lam_dis <- BoxCox(eval_data$dis,pt_dis)
+
+pt_rad <- boxcoxfit(eval_data$rad)$lambda[1]
+eval_data$lam_rad <- BoxCox(eval_data$rad,pt_rad)
+
+
+pt_tax <- boxcoxfit(eval_data$tax)$lambda[1]
+eval_data$lam_tax <- BoxCox(eval_data$tax,pt_tax)
+
+
+pt_lstat<- boxcoxfit(eval_data$lstat)$lambda[1]
+eval_data$lam_lstat <- BoxCox(eval_data$lstat,pt_lstat)
+
+
+pt_indus<- boxcoxfit(eval_data$indus)$lambda[1]
+eval_data$lam_indus <- BoxCox(eval_data$indus,pt_indus)
+
+
+```
+
+
+
+
+
+```{r}
+eval_data$target <- predict(model_3,newdata = eval_data)
+
+
+eval_data[,c("chas","target")] <- lapply(eval_data[,c("chas","target")],factor)
+
+eval_data <- eval_data%>% select(!starts_with("lam"))
+
+
+kable (describe(eval_data,skew=F),format = "latex") %>%
+  kable_styling(full_width = F,position = "left")
+eval_data %>% plot_histogram()
+
+eval_data %>% plot_boxplot(by="target")
+```
+
+
+
+
+
+```{r eval-csv}
+write.csv(eval_data$target,paste0(getwd(),"/Evaluation_Target.csv"),row.names = FALSE)
+```
+
+
+# Conclusion
+
+|   The underlying nature of this dataset was simple yet complex. In the way of modifications, there was not a great need to use dummy variables or transform the underlying data structure for this analysis. However, there was a large focus on transforming our variables to smooth out the distributions and reduce multicollinearity. After processing the data and transforming the necessary variables we were able to determine that our third model performed the best even if there may be some slight overfitting. It most accurately interpreted the multi-dimensional nature of the data and seemed best poised to deal with tails.
+
