@@ -1,0 +1,40 @@
+---
+title: "Homework 4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(DataExplorer)
+library(knitr)
+library(psych)
+library(caret)
+library(gridExtra)
+library(geoR)
+```
+
+# HOMEWORK 3
+
+Hector Santana, Zachary Safir, Mario Pena
+ 
+In this assignment we will explore, analyze and build a multiple linear regression and binary logistic model based on auto insurance data to predict the probability that a person will crash their car and the amount of money it would cost in the event of that person crashing the car.
+
+We are provided with information on a little over 8,000 customers at an auto insurance company. Each record has two response variables. TARGET_FLAG has a response of 1 if the customer was involved in a crash, or 0 if the customer was not involved in a crash.TARGET_AMT has a response of 0 if the customer did not crash their car, or a value greater than 0 otherwise. Additionally, there are 23 predictor variables in the data that could be of use for the model.
+
+We first download the "training" and "evaluation" datasets from GitHub:
+
+```{r Data Importation}
+training <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_4/insurance_training_data.csv", header=TRUE, sep=",")
+
+evaluation <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_4/insurance-evaluation-data.csv", header=TRUE, sep=",")
+
+training[,c("TARGET_FLAG","TARGET_AMT")] <- lapply(training[,c("chas","target")],factor)
+```
