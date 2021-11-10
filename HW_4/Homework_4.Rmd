@@ -21,7 +21,7 @@ library(gridExtra)
 library(geoR)
 ```
 
-# HOMEWORK 3
+# HOMEWORK 4
 
 Hector Santana, Zachary Safir, Mario Pena
  
@@ -36,5 +36,71 @@ training <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main
 
 evaluation <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_4/insurance-evaluation-data.csv", header=TRUE, sep=",")
 
-training[,c("TARGET_FLAG","TARGET_AMT")] <- lapply(training[,c("chas","target")],factor)
+training$TARGET_FLAG <- as.factor(training$TARGET_FLAG)
 ```
+
+Before we begin the data exploration process we will clean our data a bit in order to run summary statistics and plots accurately and effectively.
+
+We created a function to eliminate "$" and "," characters from the data, which will cause R to misread the data points and calculate inaccurate results.
+
+```{r CleanData}
+clean_char <- function(vector) {
+    i <- unname(sapply(vector, str_replace_all, '[,$]', ''))
+    i <- as.numeric(i)
+    return(i)
+}  
+training$INCOME <- clean_char(training$INCOME)
+training$HOME_VAL <- clean_char(training$HOME_VAL)
+training$BLUEBOOK <- clean_char(training$BLUEBOOK)
+training$OLDCLAIM <- clean_char(training$OLDCLAIM)
+
+evaluation$INCOME <- clean_char(evaluation$INCOME)
+evaluation$HOME_VAL <- clean_char(evaluation$HOME_VAL)
+evaluation$BLUEBOOK <- clean_char(evaluation$BLUEBOOK)
+evaluation$OLDCLAIM <- clean_char(evaluation$OLDCLAIM)
+```  
+
+
+# DATA EXPLORATION
+
+Below we have created a table with the summary statistics of our 23 predictor variables.
+
+```{r, echo=FALSE, warning=FALSE}
+summary <- describe(training[,c(4:26)])[,c(2:5,8,9,11,12)]
+knitr::kable(summary)
+```  
+
+According to our summary statistics above, and our graph below, there are a few columns (variables) that have missing values. These include "AGE", "INCOME", "YOJ", "HOME_VAL", and "CAR_AGE".
+
+```{r}
+plot_missing(training)
+```
+
+We can also observe that the "TARGET_FAG" variable is not evenly distributed between the "0" and "1" responses. We have more than double the amount of 0 responses throughout the data.
+
+```{r}
+prop.table(table(training$TARGET_FLAG))
+```
+
+The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we then constructed visual representations consisting of density plots, histograms, and boxplots.
+
+```{r}
+quant_var <- split_columns(training)
+plot_histogram(quant_var$continuous)
+```
+
+```{r}
+plot_bar(quant_var$discrete)
+```
+
+```{r}
+plot_density(quant_var$continuous)
+```
+
+```{r}
+plot_boxplot(
+  data = training,
+  by = "TARGET_FLAG")+ 
+  geom_jitter()
+```
+
