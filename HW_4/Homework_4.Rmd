@@ -337,7 +337,7 @@ ggplot(tf_training, aes(BLUEBOOK^0.46)) + geom_histogram(fill = 'gray', binwidth
 
 OLDCLAIM
 
-Old claim is has an extremely right skewed distribution. We'll apply a log transformation to reduce the overall skewness.
+Old claim has an extremely right skewed distribution. We'll apply a log transformation to reduce the overall skewness.
 
 ```{r}
 boxcoxfit(tf_training$OLDCLAIM[tf_training$OLDCLAIM>0])
