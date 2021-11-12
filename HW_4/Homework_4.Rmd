@@ -7,10 +7,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ```{r}
 library(tidyverse)
 library(DataExplorer)
@@ -18,6 +14,7 @@ library(knitr)
 library(psych)
 library(caret)
 library(gridExtra)
+library(stats)
 library(geoR)
 ```
 
@@ -49,10 +46,12 @@ clean_char <- function(vector) {
     i <- as.numeric(i)
     return(i)
 }  
+
 training$INCOME <- clean_char(training$INCOME)
 training$HOME_VAL <- clean_char(training$HOME_VAL)
 training$BLUEBOOK <- clean_char(training$BLUEBOOK)
 training$OLDCLAIM <- clean_char(training$OLDCLAIM)
+training <- training %>% select(-c(INDEX))
 
 evaluation$INCOME <- clean_char(evaluation$INCOME)
 evaluation$HOME_VAL <- clean_char(evaluation$HOME_VAL)
@@ -66,7 +65,7 @@ evaluation$OLDCLAIM <- clean_char(evaluation$OLDCLAIM)
 Below we have created a table with the summary statistics of our 23 predictor variables.
 
 ```{r, echo=FALSE, warning=FALSE}
-summary <- describe(training[,c(4:26)])[,c(2:5,8,9,11,12)]
+summary <- describe(training[,c(3:25)])[,c(2:5,8,9,11,12)]
 knitr::kable(summary)
 ```  
 
@@ -83,6 +82,8 @@ prop.table(table(training$TARGET_FLAG))
 ```
 
 The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we then constructed visual representations consisting of density plots, histograms, and boxplots.
+
+We can observe from the histograms below that our second response variable "TARGET_AMT" exhibits extreme right skewness.
 
 ```{r}
 quant_var <- split_columns(training)
@@ -104,3 +105,243 @@ plot_boxplot(
   geom_jitter()
 ```
 
+We can observe above that perhaps the only distribution that seems close to normal is that of the variable "AGE", as it is also evident in the boxplot against the response variable "TARGET_FLAG". The other variable that could potentially be close to normality is "YOJ", but it seems to have a bimodal distribution because of the large number of peopole with years on the job around 0 to 1.
+
+We were also given some theoretical effects (claims) about some of the variables in the data in regards to how they influence the response variable "TARGET_FLAG" and the probability of collision. 
+
+So far looking at the boxplots, we can see that some of the theoretical effects tend to be more true than others, however, we are unable to see the effects of our discrete variables against the responce variable "TARGET_FLAG". Below we have constructed some tables to get a sense of whether the claims about these variables tend to be true or not.
+
+PARENT1 -  Single Parent. Claim: This has an unknown effect
+
+At a glance, we can see that those customers who are single parents have a very high proportion for being in a car crash. However, it is hard to tell if there is a correlation given the majority of the data are from customers that are "Not" single parents.
+
+```{r}
+tbl1 <- addmargins(table(PARENT1=training$PARENT1, TARGET_FLAG=training$TARGET_FLAG))
+tbl1
+round(prop.table(tbl1[1:2,1:2], margin=1),2)
+```
+
+MSTATUS - Marital Status.  Claim: In theory, married people drive more safely. 
+
+There seems to be a balanced split between married and not married customers in our data. We can also observe that those who were involved in a car crash are evenly split between the married and not married customers. However, the proportion of those who did not crash their car tends to be higher in the married category.
+
+```{r}
+tbl2 <- addmargins(table(MSTATUS=training$MSTATUS, TARGET_FLAG=training$TARGET_FLAG))
+tbl2
+round(prop.table(tbl2[1:2,1:2], margin=1),2)
+```
+
+SEX - Gender. Claim: Urban legend says that women have less crashes than men. Is that true?. 
+
+There seems to be a balanced split between male and female customers in our data. Below we can also observe that the data is evenly split between males and females in regards to crashing or not crashing their cars, suggesting the claim may be flawed.
+
+```{r}
+tbl3 <- addmargins(table(SEX=training$SEX, TARGET_FLAG=training$TARGET_FLAG))
+tbl3
+round(prop.table(tbl3[1:2,1:2], margin=1),2)
+```
+
+EDUCATION - Max Education Level. Claim: Unknown effect, but in theory more educated people tend to drive more safely. 
+
+Given that most of the data come from those customers with high school, bachelors and masters education, the proportions also seem to correspond among those who crashed and didn't crash their car. However, there seems to be a pattern for higher proportions of car crashes within the categories with lower education.
+
+```{r}
+tbl4 <- (addmargins(table(EDUCATION=training$EDUCATION, TARGET_FLAG=training$TARGET_FLAG)))
+tbl4
+round(prop.table(tbl4[1:5,1:2], margin=1),2)
+```
+
+JOB - Job Category. Claim: In theory, white collar jobs tend to be safer. 
+
+We can see in the table below that blue collar jobs, students and home makers have the highest proportion of customers who have crashed their cars within their category, thus the claim may have some truth to it.
+
+```{r}
+tbl5 <- (addmargins(table(JOB=training$JOB, TARGET_FLAG=training$TARGET_FLAG)))
+tbl5
+round(prop.table(tbl5[1:9,1:2], margin=1),2)
+```
+
+CAR_USE - Vehicle Use.  Claim: Commercial vehicles are driven more, so might increase probability of collision. 
+
+About 63% of the car usage is private, but we can see that those customers who have crashed their car has a higher percentage in the category for commercial usage, suggesting that the claim is true about the increased probability of collision for commercial vehicles.
+
+```{r}
+tbl6 <- addmargins(table(CAR_USE=training$CAR_USE, TARGET_FLAG=training$TARGET_FLAG))
+tbl6
+round(prop.table(tbl6[1:2,1:2], margin=1),2)
+```
+
+CAR_TYPE - Type of Car. Claim: Unknown effect on probability of collision, but probably affect the payout if there is a crash. 
+
+We can see that even though sports cars is about 11% of the data we have, they have the highest proportion of car crashes within their category. We can also see that SUVs and Pickups are among the categories with the highest proportions of car crashes, while Minivans have the lowest proportion of car crashes in its category.
+
+```{r}
+tbl7 <- addmargins(table(CAR_TYPE=training$CAR_TYPE, TARGET_FLAG=training$TARGET_FLAG))
+tbl7
+round(prop.table(tbl7[1:6,1:2], margin=1),2)
+```
+
+RED_CAR -  A Red Car. Claim: Urban legend says that red cars (especially red sports cars) are more risky. Is that true?. 
+
+We can observe below that roughly 25% of cars in each category were involved in a car crash, and this may disprove the claim that red cars are more risky.
+
+```{r}
+tbl8 <- addmargins(table(RED_CAR=training$RED_CAR, TARGET_FLAG=training$TARGET_FLAG))
+tbl8
+round(prop.table(tbl8[1:2,1:2], margin=1),2)
+```
+
+REVOKED - License Revoked (Past 7 Years). Claim: If your license was revoked in the past 7 years, you probably are a more risky driver.
+
+Although only 12% of drivers in the training data have a former license suspension on record, their proportion of being involved in a car crash is twice as high as those who didn't, suggesting the claim may be true.
+
+```{r}
+tbl9 <- (addmargins(table(REVOKED=training$REVOKED,TARGET_FLAG=training$TARGET_FLAG)))
+tbl9
+round(prop.table(tbl9[1:2,1:2], margin=1),2)
+```
+
+URBANICITY - Home/Work Area. Claim: Unknown
+
+We can see that the category highly urban has a higher proportion of car crashes, but this may be due to the fact that we have a lot more data from this category, roughly 80% comes from it.
+
+```{r}
+tbl10 <- (addmargins(table(URBANICITY=training$URBANICITY, TARGET_FLAG=training$TARGET_FLAG)))
+tbl10
+round(prop.table(tbl10[1:2,1:2], margin=1),2)
+```
+
+
+# DATA PREPARATION
+
+We have 7 predictor variables in our data that are binary, so we may want to quantify these variables for our regression analyses and transform them into dummy variables.
+
+PARENT1 - Convert yes to 1
+MSTATUS - Convert yes to 1
+SEX - Convert male to 1
+CAR_USE - Convert Commercial to 1 
+RED_CAR - Convert yes to 1
+REVOKED - Convert yes to 1 
+URBANICITY: Conver Highly Urban/ Urban to 1
+
+```{r}
+tf_training <- training
+tf_training$PARENT1 <- ifelse(tf_training$PARENT1=="Yes", 1, 0)
+tf_training$MSTATUS <- ifelse(tf_training$MSTATUS=="Yes", 1, 0)
+tf_training$SEX <- ifelse(tf_training$SEX=="M", 1, 0)
+tf_training$CAR_USE <- ifelse(tf_training$CAR_USE=="Commercial", 1, 0)
+tf_training$RED_CAR <- ifelse(tf_training$RED_CAR=="Yes", 1, 0)
+tf_training$REVOKED <- ifelse(tf_training$REVOKED=="Yes", 1, 0)
+tf_training$URBANICITY <- ifelse(tf_training$URBANICITY == "Highly Urban/ Urban", 1, 0)
+```
+
+We can also do the same for the variables that have more than 2 categories and use one of these categories as the baseline:
+
+```{r}
+#In this case we use "high school graduate" as the baseline
+tf_training$Dropout <- ifelse(tf_training$EDUCATION=="<High School", 1, 0)
+tf_training$Bachelors <- ifelse(tf_training$EDUCATION=="Bachelors", 1, 0)
+tf_training$Masters <- ifelse(tf_training$EDUCATION=="Masters", 1, 0)
+tf_training$PhD <- ifelse(tf_training$EDUCATION=="PhD", 1, 0)
+
+#In this case we use "Blue Collar" as the baseline
+tf_training$Crelical <- ifelse(tf_training$JOB == "Clerical", 1, 0)
+tf_training$Doctor <- ifelse(tf_training$JOB == "Doctor", 1, 0)
+tf_training$Home_Maker <- ifelse(tf_training$JOB == "Home Maker", 1, 0)
+tf_training$Lawyer <- ifelse(tf_training$JOB == "Lawyer", 1, 0)
+tf_training$Manager <- ifelse(tf_training$JOB == "Manager", 1, 0)
+tf_training$Profesional <- ifelse(tf_training$JOB == "Profesional", 1, 0)
+tf_training$Student <- ifelse(tf_training$JOB == "Student", 1, 0)
+
+#In this case we use "SUV" as the baseline
+tf_training$Minivan <- ifelse(tf_training$CAR_TYPE=="Minivan", 1, 0)
+tf_training$Panel_Truck <- ifelse(tf_training$CAR_TYPE=="Panel Truck", 1, 0)
+tf_training$Pickup <- ifelse(tf_training$CAR_TYPE=="Pickup", 1, 0)
+tf_training$Sports_Car <- ifelse(tf_training$CAR_TYPE=="Sports Car", 1, 0)
+tf_training$Van <- ifelse(tf_training$CAR_TYPE=="Van", 1, 0)
+```
+
+We seem to have an error in one of the values for "CAR_AGE", which is -3. As we know this must be a mistake, we will turn it into a missing value.
+
+```{r}
+tf_training$CAR_AGE[tf_training$CAR_AGE == -3] <- NA
+```
+
+Since the following variables with missing data ("INCOME", "YOJ", "HOME_VAL", and "CAR_AGE") are showing skewness in their distribution we have decided to use the median as the replacement of the missing values in order to avoid any bias introduced to the mean due to the skewness itself.
+
+```{r}
+tf_training <- data.frame(
+  sapply(
+    tf_training, 
+    function(x) ifelse(is.na(x), 
+      median.default(x, na.rm = TRUE),
+      x)))
+```
+
+We will next take a look at some of the variables and see what transformations may be used.
+
+INCOME
+
+Income is a right skewed variable with a significant number zeroes. We will apply the square root transformation suggested by the box-cox function to the original variable to reduce the overall skewness.
+
+```{r}
+boxcoxfit(tf_training$INCOME[tf_training$INCOME > 0])
+
+ggplot(tf_training, aes(INCOME^0.43)) + geom_histogram(fill = 'gray', binwidth = 10, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of INCOME Transformed') + theme(plot.title = element_text(hjust = 0.5))
+```
+
+YOJ
+
+Years on the job seems to have a bimodal distribution with a large number of customers with 0-1 years. We have applied the suggested transformation to the variable to bring it closer to normality.
+
+```{r}
+boxcoxfit(tf_training$YOJ[tf_training$YOJ > 0])
+
+ggplot(tf_training, aes(YOJ^1.48)) + geom_histogram(fill = 'gray', binwidth = 10, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of YOJ Transformed') + theme(plot.title = element_text(hjust = 0.5))
+```
+
+HOME_VAL
+
+Home values are also moderately right skewed with a significant number of zeroes. We have applied the suggested transformation to this variable to reduce the overall skewness but as you can see below, it does not help much because of the significant number of 0 values in our data.
+
+```{r}
+boxcoxfit(tf_training$HOME_VAL[tf_training$HOME_VAL > 0])
+
+ggplot(tf_training, aes(HOME_VAL^0.11)) + geom_histogram(fill = 'gray', binwidth = 1, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of HOME_VAL Transformed') + theme(plot.title = element_text(hjust = 0.5))
+```
+
+CAR_AGE
+
+The age of the cars follow a bimodal distribution because of the significant number of cars that are close to 0 or 1 year of age. We have applied the suggested transformation, but again as we can see below, it has not helped much.
+
+```{r}
+boxcoxfit(tf_training$CAR_AGE[tf_training$CAR_AGE > 0])
+
+ggplot(tf_training, aes(CAR_AGE^0.58)) + geom_histogram(fill = 'gray', binwidth = 1, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of HOME_VAL Transformed') + theme(plot.title = element_text(hjust = 0.5))
+```
+
+BLUEBOOK
+
+The blue book variable is moderately right skewed. We'll apply the suggested transformation by the box-cox function.
+
+```{r}
+boxcoxfit(tf_training$BLUEBOOK)
+
+ggplot(tf_training, aes(BLUEBOOK^0.46)) + geom_histogram(fill = 'gray', binwidth = 10, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of BLUEBOOK Transformed') + theme(plot.title = element_text(hjust = 0.5))
+```
+
+OLDCLAIM
+
+Old claim is has an extremely right skewed distribution. We'll apply a log transformation to reduce the overall skewness.
+
+```{r}
+boxcoxfit(tf_training$OLDCLAIM[tf_training$OLDCLAIM>0])
+
+ggplot(tf_training, aes(log(tf_training$OLDCLAIM))) + geom_histogram(fill = 'gray', binwidth = 1, color = 'darkgray' ) + 
+ theme_classic() + labs(title = 'Histogram of OLDCLAIM Transformed') + theme(plot.title = element_text(hjust = 0.5))
+```
