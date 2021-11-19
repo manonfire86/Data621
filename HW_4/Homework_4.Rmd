@@ -79,11 +79,6 @@ evaluation <- evaluation %>%   mutate(
 
 
 
-```{r}
-plot_histogram(lm_training)
-
-plot_histogram(glm_training)
-```
 
 
 ```{r}
