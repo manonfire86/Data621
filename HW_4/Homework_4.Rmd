@@ -1,6 +1,8 @@
 ---
 title: "Homework 4"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -20,11 +22,11 @@ pacman::p_load(MASS,tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,
 
 Hector Santana, Zachary Safir, Mario Pena
  
-In this assignment we will explore, analyze and build a multiple linear regression and binary logistic model based on auto insurance data to predict the probability that a person will crash their car and the amount of money it would cost in the event of that person crashing the car.
+In this assignment we will explore, analyze, and build a multiple linear regression and binary logistic model based on auto insurance data. The models will predict the probability that a person will both crash their car and the amount of money it would cost in the event of that person crashing the car.
 
 We are provided with information on a little over 8,000 customers at an auto insurance company. Each record has two response variables. TARGET_FLAG has a response of 1 if the customer was involved in a crash, or 0 if the customer was not involved in a crash.TARGET_AMT has a response of 0 if the customer did not crash their car, or a value greater than 0 otherwise. Additionally, there are 23 predictor variables in the data that could be of use for the model.
 
-We first download the "training" and "evaluation" datasets from GitHub:
+We first download the "training" and "evaluation" data sets from GitHub:
 
 ```{r Data Importation}
 training <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_4/insurance_training_data.csv",col_select = !c("INDEX"))
@@ -35,8 +37,7 @@ evaluation <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/ma
 ```
 
 
-Before we begin the data exploration process we will clean our data a bit in order to run summary statistics and plots accurately and effectively.
-
+Let us take a look at a snippet of the data set:
 
 ```{r}
 head(training)
@@ -44,10 +45,6 @@ head(training)
 
 
 Before we begin the data exploration process we will clean our data a bit in order to run summary statistics and plots accurately and effectively.
-
-
-
-
 
 ```{r}
 
@@ -67,24 +64,6 @@ evaluation <- evaluation %>%   mutate(
                       across(where(is.character) | ends_with(fac_list), ~str_replace_all(.,"z_", "")  %>%  as.factor))
 
 ```
-
-
-
-
-
-
-
-
-
-```{r}
-plot_boxplot(lm_training,by="SEX")
-
-plot_boxplot(lm_training,by="CAR_USE")
-plot_boxplot(glm_training, by="TARGET_FLAG")
-```
-
-
-
 
 
 # DATA EXPLORATION
@@ -119,7 +98,7 @@ We can also observe that the "TARGET_FAG" variable is not evenly distributed bet
 prop.table(table(training$TARGET_FLAG))
 ```
 
-The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we then constructed visual representations consisting of density plots, histograms, and boxplots.
+The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we constructed visual representations consisting of density plots, histograms, and box plots.
 
 We can observe from the histograms below that our second response variable "TARGET_AMT" exhibits extreme right skewness.
 
@@ -143,11 +122,11 @@ plot_boxplot(
   geom_jitter()
 ```
 
-We can observe above that perhaps the only distribution that seems close to normal is that of the variable "AGE", as it is also evident in the boxplot against the response variable "TARGET_FLAG". The other variable that could potentially be close to normality is "YOJ", but it seems to have a bimodal distribution because of the large number of peopole with years on the job around 0 to 1.
+We can observe above that perhaps the only distribution that seems close to normal is that of the variable "AGE", as it is also evident in the box plot against the response variable "TARGET_FLAG". The other variable that could potentially be close to normality is "YOJ", but it seems to have a bi-modal distribution because of the large number of people with years on the job around 0 to 1.
 
 We were also given some theoretical effects (claims) about some of the variables in the data in regards to how they influence the response variable "TARGET_FLAG" and the probability of collision. 
 
-So far looking at the boxplots, we can see that some of the theoretical effects tend to be more true than others, however, we are unable to see the effects of our discrete variables against the responce variable "TARGET_FLAG". Below we have constructed some tables to get a sense of whether the claims about these variables tend to be true or not.
+So far looking at the box plots, we can see that some of the theoretical effects tend to be more true than others, however, we are unable to see the effects of our discrete variables against the response variable "TARGET_FLAG". Below we have constructed some tables to get a sense of whether the claims about these variables tend to be true or not.
 
 PARENT1 -  Single Parent. Claim: This has an unknown effect
 
@@ -250,7 +229,7 @@ round(prop.table(tbl10[1:2,1:2], margin=1),2)
 ```
 
 
-
+To gain an understanding of relevant correlations we construct a function that filters our variables for correlations of interest.
 
 
 ```{r}
@@ -287,6 +266,7 @@ corr_simple(training)
 ```
 
 
+We then apply a filter to analyze correlations where collisions occurred. 
 
 ```{r}
 corr_simple(filter(training, TARGET_FLAG==1))
@@ -296,44 +276,30 @@ corr_simple(filter(training, TARGET_FLAG==1))
 ```
 
 
+We then analyze the variance inflation factors for two saturated models, one linear and on logistic.
 
-
-
-
+#Variance Inflation of Linear Regression Model
 
 ```{r}
-
-
-
-
-
 vif(lm(TARGET_AMT ~., filter(training, TARGET_FLAG==1) %>% select(!TARGET_FLAG) ))
+```
 
-
-
+#Variance Inflation of Binary Logistic Regression Model
+```{r}
 vif(glm(TARGET_FLAG ~. -TARGET_AMT      , training,family = binomial ))
 ```
 
+
 # DATA PREPARATION
-
-
-
-
 
 We seem to have an error in one of the values for "CAR_AGE", which is -3. As we know this must be a mistake, we will turn it into a missing value.
 
 ```{r}
 training$CAR_AGE[training$CAR_AGE <0] <- NA
-
-
-
 ```
 
 
-
-
-
-Since the following variables with missing data ("INCOME", "YOJ", "HOME_VAL", and "CAR_AGE") are showing skewness in their distribution we have decided to use the median as the replacement of the missing values in order to avoid any bias introduced to the mean due to the skewness itself. 
+Since the following variables with missing data ("INCOME", "YOJ", "HOME_VAL", and "CAR_AGE") are showing skewness in their distribution, we have decided to use the median as the replacement of the missing values. This will allow us to avoid any bias introduced to the mean due to the skewness itself. 
 
 ```{r}
 
@@ -345,17 +311,10 @@ training <- training %>% mutate(across(where(is.numeric), ~case_when(is.na(.) ~m
 evaluation <- evaluation %>% mutate(across(where(is.numeric), ~case_when(is.na(.) ~median.default(.,na.rm = TRUE), T~.  )),
                                  JOB= case_when(
                                     is.na(JOB)~"Unknown",T~ as.character(JOB)) %>% as.factor)
-
-
-
-
-
-
-
 ```
 
 
-
+We then construct our training sets for our models below.
 
 
 
@@ -370,19 +329,11 @@ glm_training <-  training %>%
 
 
 
-
-
-
-
-
 We will next take a look at some of the variables and see what transformations may be used.
 
 INCOME
 
 Income is a right skewed variable with a significant number zeroes. We will apply the square root transformation suggested by the box-cox function to the original variable to reduce the overall skewness.
-
-
-
 
 
 
@@ -396,10 +347,6 @@ lam_inc <- boxcoxfit((training$INCOME+1))$lambda
 ggplot(training, aes((INCOME+1)^lam_inc)) + geom_histogram(fill = 'gray', binwidth = 10, color = 'darkgray' ) + 
  theme_classic() + labs(title = 'Histogram of INCOME Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
-
-
-
-
 
 
 YOJ
@@ -455,7 +402,9 @@ Old claim is has an extremely right skewed distribution. We'll apply a log  tran
 ggplot(training, aes(log(OLDCLAIM+1))) + geom_histogram(fill = 'gray', binwidth = 1, color = 'darkgray' ) + 
  theme_classic() + labs(title = 'Histogram of OLDCLAIM Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
-|   Make an alternate data set with a variet of transformations
+
+
+We then construct a training data set inclusive of our desired transformations.
 
 
 ```{r}
@@ -481,7 +430,7 @@ evaluation_transform_glm <- evaluation   %>%
 
 ```
 
-| Test the skewness of the various "TARGET_AMT" variables. Appears that the log and Standard Box Cox Transformation have the least skewing. 
+Test the skewness of the various "TARGET_AMT" variables. Appears that the log and Standard Box Cox Transformation have the least skewing. 
 
 ```{r}
 list  = c(skewness(lm_training$TARGET_AMT),
@@ -502,10 +451,7 @@ kable(tibble( Transformation = c("Original","Square Root","Log", "Box Cox Standa
 ```
 
 
-
-
-
-
+We partition our data to train our models and test the accuracy and performance of our constructed models.
 
 
 ```{r}
@@ -523,13 +469,9 @@ glm_additional_test_tran <- glm_training_transform[-glm_train_index_tran,]
 
 
 
-
-
-
 Post transformation the variable application has become statistically significant and we can begin to use a process of backward elimination for variable selection.
 
-Model 2 I use the step function to apply backward elimination.
-
+Model 2 we use the step function to apply backward elimination.
 
 
 ```{r}
@@ -606,18 +548,8 @@ summary(fit_2)
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-|   Simple linear model, not using any transformations
+Now that the binary logistic regression model is constructed we can proceed to 
+the linear regression model not using any transformations.
 
 
 ```{r}
@@ -626,9 +558,6 @@ set.seed(120)
 lm_train_index <- createDataPartition(lm_training$TARGET_AMT, p=.8, list=FALSE, times = 1)
 lm_additional_train <- lm_training[lm_train_index,]
 lm_additional_test <- lm_training[-lm_train_index,]
-
-
-
 ```
 
 
@@ -638,15 +567,13 @@ lm_additional_test <- lm_training[-lm_train_index,]
 
 ```{r}
 lm_one <- lm(TARGET_AMT~.,lm_additional_train)
-
-
 ```
 
 ```{r}
 summary(lm_one)
 ```
 
-| Use STEPAIC from the MASS package to find the best model
+We then use STEPAIC function from the MASS package to find the best model.
 
 
 ```{r}
@@ -661,10 +588,7 @@ summary(test)
 ```
 
 
-|   We find that our residuals are highly skewed 
-
-
-
+We find that our residuals are highly skewed 
 
 
 ```{r}
@@ -705,16 +629,6 @@ summary(test_two)
 ```
 
 
-
-
-
-
-
-|   Picking our model
-
-
-
-
 # Model Selection
 
 
@@ -751,10 +665,10 @@ confusionMatrix(data=as.factor(results_model_two), glm_additional_test_tran$TARG
 glm_prob_one <- predict(fit_1, newdata=glm_additional_test, type="response")
 glm_pred_one <- prediction(glm_prob_one, glm_additional_test$TARGET_FLAG)
 glm_perf_one <- performance(glm_pred_one, measure = "tpr", x.measure = "fpr")
-plot(glm_perf_one)
 glm_auc_mod1 <- performance(glm_pred_one, measure = "auc")
 glm_auc_mod1 <- glm_auc_mod1@y.values[[1]]
-str(glm_additional_test)
+plot(glm_perf_one)
+print(glm_auc_mod1)
 ```
 
 
@@ -762,9 +676,10 @@ str(glm_additional_test)
 glm_prob_two <- predict(fit_2, newdata=glm_additional_test_tran, type="response")
 glm_pred_two <- prediction(glm_prob_two, glm_additional_test_tran$TARGET_FLAG)
 glm_perf_two <- performance(glm_pred_two, measure = "tpr", x.measure = "fpr")
-plot(glm_perf_two)
 glm_auc_mod2 <- performance(glm_pred_two, measure = "auc")
 glm_auc_mod2 <- glm_auc_mod2@y.values[[1]]
+plot(glm_perf_two)
+print(glm_auc_mod2)
 ```
 
  
@@ -815,7 +730,9 @@ skewness(test_two$residuals)
 
 
 
-
+Using model two for both our binary logistic model and our
+our linear regression model, we update our evaluation data set 
+with the final required predictions.
 
 
 ```{r}
@@ -856,6 +773,16 @@ evaluation  <- evaluation %>% mutate(TARGET_AMT = case_when( TARGET_FLAG ==1 ~  
 
 
 ```{r,eval=F}
-write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
+#write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
 ```
 
+# Conclusion
+
+The underlying nature of this data set had a few subtle complexities. In the way
+of modifications, there was a need to use regular expressions and re coded factors
+in order to make the data more interpretable to our models. In addition, there
+was a large focus on transforming our variables to smooth out the distributions
+and reduce skewness. After processing the data and transforming the necessary
+variables, we were able to determine that the second iteration of our models
+performed the best. It most accurately interpreted the data and seemed best
+poised to deal data abstractions.
