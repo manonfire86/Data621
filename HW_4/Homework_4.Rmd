@@ -9,19 +9,11 @@ knitr::opts_chunk$set(echo = TRUE, message = F)
 
 ```{r}
 
-library(MASS)
-library(tidyverse)
-library(DataExplorer)
-library(knitr)
-library(psych)
-library(caret)
-library(gridExtra)
-library(stats)
-library(geoR)
-library(arsenal)
-library(forecast)
-library(e1071)
-library(car)
+
+
+pacman::p_load(MASS,tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,geoR,caret,
+               psych,gridExtra,DMwR2,lmtest,pscl,MKmisc,ROCR,survey,stats,rstatix,Rcpp,
+               corrplot,forecast,cowplot,gridExtra,arsenal,e1071,car)
 ```
 
 # HOMEWORK 4
@@ -43,8 +35,11 @@ evaluation <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/ma
 ```
 
 
+Before we begin the data exploration process we will clean our data a bit in order to run summary statistics and plots accurately and effectively.
+
+
 ```{r}
-training
+head(training)
 ```
 
 
@@ -88,10 +83,6 @@ plot_boxplot(lm_training,by="CAR_USE")
 plot_boxplot(glm_training, by="TARGET_FLAG")
 ```
 
-
-```{r}
-training %>% count(CLM_FREQ)
-```
 
 
 
@@ -263,7 +254,7 @@ round(prop.table(tbl10[1:2,1:2], margin=1),2)
 
 
 ```{r}
-corr_simple <- function(data=df,sig=0.3){
+corr_simple <- function(data=df,sig=0.4){
   
   library(corrplot)
   #convert data to numeric in order to run correlations
@@ -288,7 +279,6 @@ corr_simple <- function(data=df,sig=0.3){
   corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ")
 }
 ```
-
 
 
 
@@ -358,9 +348,11 @@ evaluation <- evaluation %>% mutate(across(where(is.numeric), ~case_when(is.na(.
 
 
 
+
+
+
+
 ```
-
-
 
 
 
@@ -471,6 +463,13 @@ lm_training_transform  <-lm_training  %>%
  
    mutate(across(where(is.numeric) ,list(lam_one= ~((.+1)^boxcoxfit(.+1)$lambda) ,   lam_two=   ~BoxCox(., BoxCox.lambda(.) ) , sqrt= ~sqrt(.), log = ~log(.+1))  ) )  
 
+
+glm_training_transform  <- glm_training  %>%
+ 
+   mutate(across(where(is.numeric) ,list(lam_one= ~((.+1)^boxcoxfit(.+1)$lambda) ,   lam_two=   ~BoxCox(., BoxCox.lambda(.) ) , sqrt= ~sqrt(.), log = ~log(.+1))  ) )  
+
+
+
 evaluation_transform  <- evaluation   %>% 
  
    mutate(across(where(is.numeric) ,list(lam_one= ~((.+1)^boxcoxfit(lm_training$.+1)$lambda) ,   lam_two=   ~BoxCox(., BoxCox.lambda(lm_training$.) ) , sqrt= ~sqrt(.), log = ~log(.+1))  ) )  
@@ -498,11 +497,142 @@ kable(tibble( Transformation = c("Original","Square Root","Log", "Box Cox Standa
 ```
 
 
+
+
+
+
+
+
+```{r}
+set.seed(120)
+
+glm_train_index <- createDataPartition(glm_training$TARGET_FLAG, p=.8, list=FALSE, times = 1)
+glm_additional_train <- glm_training[glm_train_index,]
+glm_additional_test <- glm_training[-glm_train_index,]
+
+glm_train_index_tran <- createDataPartition(glm_training_transform$TARGET_FLAG, p=.8, list=FALSE, times = 1)
+glm_additional_train_tran <- glm_training_transform[glm_train_index_tran,]
+glm_additional_test_tran <- glm_training_transform[-glm_train_index_tran,]
+
+```
+
+
+
+
+
+
+Post transformation the variable application has become statistically significant and we can begin to use a process of backward elimination for variable selection.
+
+Model 2 I use the step function to apply backward elimination.
+
+
+
+```{r}
+glm_mod1 = glm(TARGET_FLAG ~., data = glm_additional_train, family = binomial(link='logit'))
+```
+
+
+```{r}
+summary(glm_mod1)
+```
+
+
+
+
+
+```{r,eval=F}
+fit_1 = step(glm_mod1,direction="both",trace=FALSE)
+
+```
+
+
+
+
+```{r,eval=F}
+saveRDS(fit_1,"fit_1")
+```
+
+
+```{r}
+fit_1 <- readRDS("fit_1")
+
+```
+
+
+```{r}
+summary(fit_1)
+```
+
+
+
+```{r}
+glm_mod2 <- glm(TARGET_FLAG ~., data = glm_additional_train_tran, family = binomial(link='logit'))
+```
+
+
+```{r}
+summary(glm_mod2)
+```
+
+
+
+
+```{r,eval=F}
+fit_2 <- step(glm_mod2,direction="both",trace=FALSE)
+```
+
+
+
+```{r,eval=F}
+saveRDS(fit_2,"fit_2")
+```
+
+
+```{r}
+fit_2 <- readRDS("fit_2")
+
+```
+
+
+
+```{r}
+summary(fit_2)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 |   Simple linear model, not using any transformations
 
 
 ```{r}
-lm_one <- lm(TARGET_AMT~.,lm_training)
+set.seed(120)
+
+lm_train_index <- createDataPartition(lm_training$TARGET_AMT, p=.8, list=FALSE, times = 1)
+lm_additional_train <- lm_training[lm_train_index,]
+lm_additional_test <- lm_training[-lm_train_index,]
+
+
+
+```
+
+
+
+
+
+
+```{r}
+lm_one <- lm(TARGET_AMT~.,lm_additional_train)
 
 
 ```
@@ -528,23 +658,23 @@ summary(test)
 
 |   We find that our residuals are highly skewed 
 
+
+
+
+
 ```{r}
-plot(test)
-hist(test$residuals)
-skewness(test$residuals)
+set.seed(120)
+
+lm_train_index_tran_lam <- createDataPartition(lm_training_transform$TARGET_AMT_lam_one, p=.8, list=FALSE, times = 1)
+lm_additional_train_trans_lam <- lm_training_transform[lm_train_index_tran_lam,]
+lm_additional_test_trans_lam <- lm_training_transform[-lm_train_index_tran_lam,]
 ```
 
 
 
 
-
-
- 
-
-
-
 ```{r}
-lm_two <- lm(TARGET_AMT_lam_one~.-TARGET_AMT-TARGET_AMT_lam_two-TARGET_AMT_sqrt-TARGET_AMT_log,lm_training_transform)
+lm_two <- lm(TARGET_AMT_lam_one~.-TARGET_AMT-TARGET_AMT_lam_two-TARGET_AMT_sqrt-TARGET_AMT_log,lm_additional_train_trans_lam)
 
 ```
 
@@ -565,14 +695,110 @@ test_two <- stepAIC(lm_two,direction = "both",trace = F)
 
 
 
+```{r}
+summary(test_two)
+```
+
+
+
+
+
+
+
+|   Picking our model
+
+
+
+
+# Model Selection
+
+
+## Binary Model Selecion
+
+We can predict results to discern performance metrics.
+
+
+
+```{r}
+    
+
+results_model_one = round(predict.glm(fit_1,newdata = glm_additional_test,type = "response"))
+ 
+
+
+results_model_two = round(predict(fit_2,newdata = `glm_additional_test_tran`,type = "response"))
+```
+
+
+
+
+|   In selecting the best model, first we need to measure performance of the models prior to selection. We can do so by looking at the confusion matrix and AUC curve for our models. For the first model we have:
+
+
+```{r}
+confusionMatrix(data=as.factor(results_model_one), glm_additional_test$TARGET_FLAG)
+confusionMatrix(data=as.factor(results_model_two), glm_additional_test_tran$TARGET_FLAG)
+
+```
+
+
+```{r}
+glm_prob_one <- predict(fit_1, newdata=glm_additional_test, type="response")
+glm_pred_one <- prediction(glm_prob_one, glm_additional_test$TARGET_FLAG)
+glm_perf_one <- performance(glm_pred_one, measure = "tpr", x.measure = "fpr")
+plot(glm_perf_one)
+glm_auc_mod1 <- performance(glm_pred_one, measure = "auc")
+glm_auc_mod1 <- glm_auc_mod1@y.values[[1]]
+str(glm_additional_test)
+```
+
+
+```{r}
+glm_prob_two <- predict(fit_2, newdata=glm_additional_test_tran, type="response")
+glm_pred_two <- prediction(glm_prob_two, glm_additional_test_tran$TARGET_FLAG)
+glm_perf_two <- performance(glm_pred_two, measure = "tpr", x.measure = "fpr")
+plot(glm_perf_two)
+glm_auc_mod2 <- performance(glm_pred_two, measure = "auc")
+glm_auc_mod2 <- glm_auc_mod2@y.values[[1]]
+```
+
+ 
+
+
+## Linear Model Selection 
+
+
+
+| Model One diagnostics, highly skewed and horrible R-Squared value when testing on hold out data. 
+
+```{r}
+plot(test)
+hist(test$residuals)
+skewness(test$residuals)
+```
 
 
 
 
 ```{r}
-summary(test_two)
+  eval_mod <- evaluation
+eval_mod$TARGET_AMT <-  predict.lm(test,  newdata=evaluation)
+
+hist(training$TARGET_AMT)
+  
+hist(eval_mod$TARGET_AMT)
+  
+summary(eval_mod$TARGET_AMT)
+summary(lm_training$TARGET_AMT)
 ```
 
+
+```{r}
+
+postResample(pred = predict(test,lm_additional_test), obs =lm_additional_test$TARGET_AMT)
+```
+
+|    Model two is no longer skewed, and while the R-Squared is small, is now above one percent accuracy. Far better than the first model 
 
 
 ```{r}
@@ -589,7 +815,7 @@ skewness(test_two$residuals)
 
 ```{r}
 
-  eval_mod_2 <- evaluation
+eval_mod_2 <- evaluation
 eval_mod_2$TARGET_AMT <-  predict.lm(test_two,  newdata=evaluation_transform)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda)
 
 hist(training$TARGET_AMT)
@@ -605,219 +831,10 @@ summary(lm_training$TARGET_AMT)
 
 
 
-```{r}
-eval_mod_2  %>% slice_max(TARGET_AMT)
-```
-
-
-
-
 
 ```{r}
-model_three <- lm(TARGET_AMT_log~. -TARGET_AMT -TARGET_AMT_lam_two-TARGET_AMT_lam_one -TARGET_AMT_sqrt, lm_training_transform)
+
+postResample(pred = predict(test_two,lm_additional_test_trans_lam)^(1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda), obs =lm_additional_test_trans_lam$TARGET_AMT)
 ```
 
-
-
-```{r}
-summary(model_three)
-```
-
-
-```{r}
-test_three <- stepAIC(model_three,direction = "both",trace = F)
-```
-
-
- 
-
-
-
-```{r}
-summary(test_three)
-```
-
-
-
-
-```{r}
-eval_mod_3 <- evaluation
-eval_mod_3$TARGET_AMT <-   exp(predict.lm(test_three,  newdata=evaluation_transform) )
-
-
-
-hist(training$TARGET_AMT)
-  
-hist(eval_mod_3$TARGET_AMT)
-  
-summary(eval_mod_3$TARGET_AMT)
-summary(lm_training$TARGET_AMT)
-
-
-
-```
-
-
- 
-
-
-
-|   Picking our model
-
-
-
-
-
-
-
-
-
-## Please read!!!
-
- 
-|    Everything below here, not sure if I will use not. 
-
-
-
-```{r}
-set.seed(120)
-
-log_data <- lm_training_lam_two %>% select(!ends_with(c("T_lam_one","T_lam_two","T_sqrt","T_AMT")))
-
-
-train_index <- createDataPartition(log_data$TARGET_AMT_log, p=.8, list=FALSE, times = 1)
-additional_train <- log_data[train_index,]
-additional_test <- log_data[-train_index,]
-```
-
-
-
-```{r}
-model_1 <- train(TARGET_AMT_log
-                 ~., data = additional_train, 
-              method = "lmStepAIC",
-              trControl = trainControl(
-                  method = "cv", number = 10,
-                  savePredictions = TRUE),
-              tuneLength = 5, 
-              preProcess = c("center", "scale"))
-
- 
-```
-
-
-
-
-
-```{r}
-saveRDS(model_1,"model_one")
-```
-
-
-```{r}
-t <- readRDS("model_one")
-
-t$finalModel$model
-
-```
-
-
-
-```{r}
-summary(model_1)
-```
-
-
-
-```{r}
-plot(model_1$finalModel)
-hist(model_1$finalModel$residuals)
-skewness(model_1$finalModel$residuals)
-
-
-model_1$finalMode$anova
-```
-
-```{r}
-summary(model_1$finalMode)
-plot(model_1$finalModel)
-```
-
-
-
-
-
-```{r}
-
-set.seed(120)
-
-
-log_alt <- lm_training %>% mutate(TARGET_AMT = log(TARGET_AMT+1))
-
-train_index_2 <- createDataPartition(log_alt$TARGET_AMT, p=.8, list=FALSE, times = 1)
-additional_train_2 <- log_alt[train_index_2,]
-additional_test_2 <- log_alt[-train_index_2,]
-
-
-
-model_2 <- train(TARGET_AMT ~., data = additional_train_2, 
-              method = "lmStepAIC",
-              trControl = trainControl(
-                  method = "cv", number = 10,
-                  savePredictions = TRUE),
-              tuneLength = 5, 
-              preProcess = c("center", "scale"))
-
-```
-
-```{r}
-summary(model_2)
-```
-
-
-```{r}
-summary(model_2$finalModel)
-```
-
-```{r}
-plot(model_2$finalModel)
-hist(model_2$finalModel$residuals)
-skewness(model_2$finalModel$residuals)
-```
-
-
-
-```{r}
-summary(lm(formula = TARGET_AMT ~ KIDSDRIV3 + INCOME + MSTATUSYes + EDUCATIONMasters + 
-    EDUCATIONPhD + BLUEBOOK + CLM_FREQ4 + MVR_PTS, data = log_alt))
-```
-
-
-```{r}
-set.seed(120)
-
-
- 
-
-train_index_3 <- createDataPartition(lm_training$TARGET_AMT, p=.8, list=FALSE, times = 1)
-additional_train_3 <- lm_training[train_index_3,]
-additional_test_3 <- lm_training[-train_index_3,]
-
-
-
-model_3 <- train(TARGET_AMT ~., data = additional_train_3, 
-              method = "lmStepAIC",
-              trControl = trainControl(
-                  method = "cv", number = 10,
-                  savePredictions = TRUE),
-              tuneLength = 5, 
-              preProcess = c("center", "scale"))
-
-```
-
-
-
-```{r}
-summary(model_3)
-```
 
