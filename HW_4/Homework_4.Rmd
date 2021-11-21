@@ -1,8 +1,12 @@
 ---
 title: "Homework 4"
+author: "Hector Santana, Zachary Safir, Mario Pena"
 output:
-  pdf_document: default
-  html_document: default
+  pdf_document:
+    df_print: default
+    toc: true
+    number_sections: true
+  
 ---
 
 ```{r setup, include=FALSE}
@@ -18,15 +22,18 @@ pacman::p_load(MASS,tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,
                corrplot,forecast,cowplot,gridExtra,arsenal,e1071,car)
 ```
 
-# HOMEWORK 4
 
-Hector Santana, Zachary Safir, Mario Pena
+
+\pagebreak
+
+
+
  
-In this assignment we will explore, analyze, and build a multiple linear regression and binary logistic model based on auto insurance data. The models will predict the probability that a person will both crash their car and the amount of money it would cost in the event of that person crashing the car.
+|   In this assignment we will explore, analyze, and build a multiple linear regression and binary logistic model based on auto insurance data. The models will predict the probability that a person will crash their car and then the subsequent insurance cost for the accident.
 
-We are provided with information on a little over 8,000 customers at an auto insurance company. Each record has two response variables. TARGET_FLAG has a response of 1 if the customer was involved in a crash, or 0 if the customer was not involved in a crash.TARGET_AMT has a response of 0 if the customer did not crash their car, or a value greater than 0 otherwise. Additionally, there are 23 predictor variables in the data that could be of use for the model.
+|   We are provided with information on a little over 8,000 customers at an auto insurance company. Each record has two response variables. TARGET_FLAG has a response of 1 if the customer was involved in a crash, or 0 if the customer was not involved in a crash.TARGET_AMT has a response of 0 if the customer did not crash their car, or a value greater than 0 otherwise. Additionally, there are 23 predictor variables in the data that could be of use for the model.
 
-We first download the "training" and "evaluation" data sets from GitHub:
+
 
 ```{r Data Importation}
 training <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_4/insurance_training_data.csv",col_select = !c("INDEX"))
@@ -37,14 +44,15 @@ evaluation <- read_csv("https://raw.githubusercontent.com/manonfire86/Data621/ma
 ```
 
 
-Let us take a look at a snippet of the data set:
+|   Let us take a look at a snippet of the data set:
 
 ```{r}
-head(training)
+kable(head(training),format = "latex",booktabs=T) %>% kable_styling(latex_options =c("scale_down","HOLD_position","striped") )
 ```
 
 
-Before we begin the data exploration process we will clean our data a bit in order to run summary statistics and plots accurately and effectively.
+|   Before we begin the data exploration process we will clean our data a bit in order to run summary statistics and plots accurately and effectively. We remove the dollar signs in the data, remove the extra z_ character found on some variables, and convert everything to the correct data format. Some variables, such as number of kids, we decided to make factors as they are not continuous variables. 
+
 
 ```{r}
 
@@ -66,41 +74,32 @@ evaluation <- evaluation %>%   mutate(
 ```
 
 
+\newpage
+
 # DATA EXPLORATION
 
-Below we have created a table with the summary statistics of our 23 predictor variables.
+## Numeric Variable Exploratipon
+
+|   Below we have created a table with the summary statistics for our numeric predictor variables. We will explore the categorical variables later.
+
+| According to our summary statistics, we note that quite a few of our numeric variables appear skewed. 
 
 ```{r, echo=FALSE, warning=FALSE}
-summary <- describe(training[,c(3:25)])[,c(2:5,8,9,11,12)]
-knitr::kable(summary)
+descrip <- describe((training %>% select(where(is.numeric))))
+kable(descrip,booktabs = TRUE, format ="latex") %>% kable_styling(latex_options = c("HOLD_position","scale_down"))
 
-
-my_controls <- tableby.control(
-  numeric.stats = c("meansd", "medianq1q3", "range","Nmiss"), 
-  test = F,
-  digits=2
-)
-
-kable(summary(tableby(TARGET_FLAG~.,training, control = my_controls),text=T),booktabs = TRUE) 
 
 
 ```  
 
-According to our summary statistics above, and our graph below, there are a few columns (variables) that have missing values. These include "AGE", "INCOME", "YOJ", "HOME_VAL", and "CAR_AGE".
 
-```{r}
-plot_missing(training)
-```
 
-We can also observe that the "TARGET_FAG" variable is not evenly distributed between the "0" and "1" responses. We have more than double the amount of 0 responses throughout the data.
 
-```{r}
-prop.table(table(training$TARGET_FLAG))
-```
 
-The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we constructed visual representations consisting of density plots, histograms, and box plots.
 
-We can observe from the histograms below that our second response variable "TARGET_AMT" exhibits extreme right skewness.
+|   The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we constructed visual representations consisting of density plots, histograms, and box plots.
+
+|   We can observe from the histograms below that our second response variable "TARGET_AMT" exhibits extreme right skewness.
 
 ```{r}
 quant_var <- split_columns(training)
@@ -118,29 +117,34 @@ plot_density(quant_var$continuous)
 ```{r}
 plot_boxplot(
   data = training,
-  by = "TARGET_FLAG")+ 
-  geom_jitter()
+  by = "TARGET_FLAG") 
 ```
 
-We can observe above that perhaps the only distribution that seems close to normal is that of the variable "AGE", as it is also evident in the box plot against the response variable "TARGET_FLAG". The other variable that could potentially be close to normality is "YOJ", but it seems to have a bi-modal distribution because of the large number of people with years on the job around 0 to 1.
+|   We can observe above that perhaps the only distribution that seems close to normal is that of the variable "AGE", as it is also evident in the box plot against the response variable "TARGET_FLAG". The other variable that could potentially be close to normality is "YOJ", but it seems to have a bi-modal distribution because of the large number of people with years on the job around 0 to 1.
 
-We were also given some theoretical effects (claims) about some of the variables in the data in regards to how they influence the response variable "TARGET_FLAG" and the probability of collision. 
+|   We were also given some theoretical effects (claims) about some of the variables in the data in regards to how they influence the response variable "TARGET_FLAG" and the probability of collision. 
 
-So far looking at the box plots, we can see that some of the theoretical effects tend to be more true than others, however, we are unable to see the effects of our discrete variables against the response variable "TARGET_FLAG". Below we have constructed some tables to get a sense of whether the claims about these variables tend to be true or not.
+ 
 
-PARENT1 -  Single Parent. Claim: This has an unknown effect
 
-At a glance, we can see that those customers who are single parents have a very high proportion for being in a car crash. However, it is hard to tell if there is a correlation given the majority of the data are from customers that are "Not" single parents.
+## Analyzing Catogorical Variables 
+
+|   So far looking at the box plots, we can see that some of the theoretical effects tend to be more true than others, however, we are unable to see the effects of our discrete variables against the response variable "TARGET_FLAG". Below we have constructed some tables to get a sense of whether the claims about these variables tend to be true or not.  
+|
+|   PARENT1 -  Single Parent. Claim: This has an unknown effect 
+| 
+|   At a glance, we can see that those customers who are single parents have a very high proportion for being in a car crash. However, it is hard to tell if there is a correlation given the majority of the data are from customers that are "Not" single parents. 
 
 ```{r}
-tbl1 <- addmargins(table(PARENT1=training$PARENT1, TARGET_FLAG=training$TARGET_FLAG))
-tbl1
-round(prop.table(tbl1[1:2,1:2], margin=1),2)
+tbl1 <- addmargins(table(PARENT1=training$PARENT1, TARGET_FLAG=training$TARGET_FLAG)) 
+tbl1 
+round(prop.table(tbl1[1:2,1:2], margin=1),2)  
 ```
 
-MSTATUS - Marital Status.  Claim: In theory, married people drive more safely. 
 
-There seems to be a balanced split between married and not married customers in our data. We can also observe that those who were involved in a car crash are evenly split between the married and not married customers. However, the proportion of those who did not crash their car tends to be higher in the married category.
+|   MSTATUS - Marital Status.  Claim: In theory, married people drive more safely. 
+
+|   There seems to be a balanced split between married and not married customers in our data. We can also observe that those who were involved in a car crash are evenly split between the married and not married customers. However, the proportion of those who did not crash their car tends to be higher in the married category.
 
 ```{r}
 tbl2 <- addmargins(table(MSTATUS=training$MSTATUS, TARGET_FLAG=training$TARGET_FLAG))
@@ -148,9 +152,11 @@ tbl2
 round(prop.table(tbl2[1:2,1:2], margin=1),2)
 ```
 
-SEX - Gender. Claim: Urban legend says that women have less crashes than men. Is that true?. 
 
-There seems to be a balanced split between male and female customers in our data. Below we can also observe that the data is evenly split between males and females in regards to crashing or not crashing their cars, suggesting the claim may be flawed.
+|   SEX - Gender. Claim: Urban legend says that women have less crashes than men. Is that true?. 
+
+|   There seems to be a balanced split between male and female customers in our data. Below we can also observe that the data is evenly split between males and females in regards to crashing or not crashing their cars, suggesting the claim may be flawed.
+
 
 ```{r}
 tbl3 <- addmargins(table(SEX=training$SEX, TARGET_FLAG=training$TARGET_FLAG))
@@ -158,9 +164,9 @@ tbl3
 round(prop.table(tbl3[1:2,1:2], margin=1),2)
 ```
 
-EDUCATION - Max Education Level. Claim: Unknown effect, but in theory more educated people tend to drive more safely. 
+|   EDUCATION - Max Education Level. Claim: Unknown effect, but in theory more educated people tend to drive more safely. 
 
-Given that most of the data come from those customers with high school, bachelors and masters education, the proportions also seem to correspond among those who crashed and didn't crash their car. However, there seems to be a pattern for higher proportions of car crashes within the categories with lower education.
+|   Given that most of the data come from those customers with high school, bachelors and masters education, the proportions also seem to correspond among those who crashed and didn't crash their car. However, there seems to be a pattern for higher proportions of car crashes within the categories with lower education.
 
 ```{r}
 tbl4 <- (addmargins(table(EDUCATION=training$EDUCATION, TARGET_FLAG=training$TARGET_FLAG)))
@@ -168,9 +174,9 @@ tbl4
 round(prop.table(tbl4[1:5,1:2], margin=1),2)
 ```
 
-JOB - Job Category. Claim: In theory, white collar jobs tend to be safer. 
+|   JOB - Job Category. Claim: In theory, white collar jobs tend to be safer. 
 
-We can see in the table below that blue collar jobs, students and home makers have the highest proportion of customers who have crashed their cars within their category, thus the claim may have some truth to it.
+|   We can see in the table below that blue collar jobs, students and home makers have the highest proportion of customers who have crashed their cars within their category, thus the claim may have some truth to it.
 
 ```{r}
 tbl5 <- (addmargins(table(JOB=training$JOB, TARGET_FLAG=training$TARGET_FLAG)))
@@ -178,9 +184,9 @@ tbl5
 round(prop.table(tbl5[1:9,1:2], margin=1),2)
 ```
 
-CAR_USE - Vehicle Use.  Claim: Commercial vehicles are driven more, so might increase probability of collision. 
+|   CAR_USE - Vehicle Use.  Claim: Commercial vehicles are driven more, so might increase probability of collision. 
 
-About 63% of the car usage is private, but we can see that those customers who have crashed their car has a higher percentage in the category for commercial usage, suggesting that the claim is true about the increased probability of collision for commercial vehicles.
+|   About 63% of the car usage is private, but we can see that those customers who have crashed their car has a higher percentage in the category for commercial usage, suggesting that the claim is true about the increased probability of collision for commercial vehicles.
 
 ```{r}
 tbl6 <- addmargins(table(CAR_USE=training$CAR_USE, TARGET_FLAG=training$TARGET_FLAG))
@@ -188,9 +194,9 @@ tbl6
 round(prop.table(tbl6[1:2,1:2], margin=1),2)
 ```
 
-CAR_TYPE - Type of Car. Claim: Unknown effect on probability of collision, but probably affect the payout if there is a crash. 
+|   CAR_TYPE - Type of Car. Claim: Unknown effect on probability of collision, but probably affect the payout if there is a crash. 
 
-We can see that even though sports cars is about 11% of the data we have, they have the highest proportion of car crashes within their category. We can also see that SUVs and Pickups are among the categories with the highest proportions of car crashes, while Minivans have the lowest proportion of car crashes in its category.
+|   We can see that even though sports cars is about 11% of the data we have, they have the highest proportion of car crashes within their category. We can also see that SUVs and Pickups are among the categories with the highest proportions of car crashes, while Minivans have the lowest proportion of car crashes in its category.
 
 ```{r}
 tbl7 <- addmargins(table(CAR_TYPE=training$CAR_TYPE, TARGET_FLAG=training$TARGET_FLAG))
@@ -198,9 +204,10 @@ tbl7
 round(prop.table(tbl7[1:6,1:2], margin=1),2)
 ```
 
-RED_CAR -  A Red Car. Claim: Urban legend says that red cars (especially red sports cars) are more risky. Is that true?. 
+|   RED_CAR -  A Red Car. Claim: Urban legend says that red cars (especially red sports cars) are more risky. Is that true?. 
 
-We can observe below that roughly 25% of cars in each category were involved in a car crash, and this may disprove the claim that red cars are more risky.
+|   We can observe below that roughly 25% of cars in each category were involved in a car crash, and this may disprove the claim that red cars are more risky.
+
 
 ```{r}
 tbl8 <- addmargins(table(RED_CAR=training$RED_CAR, TARGET_FLAG=training$TARGET_FLAG))
@@ -208,9 +215,9 @@ tbl8
 round(prop.table(tbl8[1:2,1:2], margin=1),2)
 ```
 
-REVOKED - License Revoked (Past 7 Years). Claim: If your license was revoked in the past 7 years, you probably are a more risky driver.
+|   REVOKED - License Revoked (Past 7 Years). Claim: If your license was revoked in the past 7 years, you probably are a more risky driver.
 
-Although only 12% of drivers in the training data have a former license suspension on record, their proportion of being involved in a car crash is twice as high as those who didn't, suggesting the claim may be true.
+|   Although only 12% of drivers in the training data have a former license suspension on record, their proportion of being involved in a car crash is twice as high as those who didn't, suggesting the claim may be true.
 
 ```{r}
 tbl9 <- (addmargins(table(REVOKED=training$REVOKED,TARGET_FLAG=training$TARGET_FLAG)))
@@ -218,9 +225,9 @@ tbl9
 round(prop.table(tbl9[1:2,1:2], margin=1),2)
 ```
 
-URBANICITY - Home/Work Area. Claim: Unknown
+|   URBANICITY - Home/Work Area. Claim: Unknown
 
-We can see that the category highly urban has a higher proportion of car crashes, but this may be due to the fact that we have a lot more data from this category, roughly 80% comes from it.
+|    can see that the category highly urban has a higher proportion of car crashes, but this may be due to the fact that we have a lot more data from this category, roughly 80% comes from it.
 
 ```{r}
 tbl10 <- (addmargins(table(URBANICITY=training$URBANICITY, TARGET_FLAG=training$TARGET_FLAG)))
@@ -229,7 +236,22 @@ round(prop.table(tbl10[1:2,1:2], margin=1),2)
 ```
 
 
-To gain an understanding of relevant correlations we construct a function that filters our variables for correlations of interest.
+\newpage
+
+## Missing Values
+
+| Shown in our graph below, there are a few columns (variables) that have missing values. These include "AGE", "INCOME", "YOJ", "HOME_VAL", and "CAR_AGE".
+
+```{r}
+plot_missing(training)
+```
+
+
+\newpage
+
+## Correlation Exploration 
+
+|   To gain an understanding of relevant correlations we construct a function that filters our variables for correlations of interest. The result of that function can be seen below. Even though our data has a lot of variables with multiple levels, it seems that there aren't many strong correlations. Setting the minimum to .4, and we only have 7 of the many possible combination of variable correlations.
 
 
 ```{r}
@@ -266,44 +288,42 @@ corr_simple(training)
 ```
 
 
-We then apply a filter to analyze correlations where collisions occurred. 
+|   We then apply a filter to analyze correlations where collisions occurred. 
 
 ```{r}
 corr_simple(filter(training, TARGET_FLAG==1))
 
-
-
 ```
 
+\newpage
 
-We then analyze the variance inflation factors for two saturated models, one linear and on logistic.
+|   We then analyze the variance inflation factors for two saturated models, one linear and on logistic. We do not find any concerning multicollinearity issues.
 
-#Variance Inflation of Linear Regression Model
 
 ```{r}
-vif(lm(TARGET_AMT ~., filter(training, TARGET_FLAG==1) %>% select(!TARGET_FLAG) ))
+kable(vif(lm(TARGET_AMT ~., filter(training, TARGET_FLAG==1) %>% select(!TARGET_FLAG) )),  format = 'latex',caption = "Linear Model VIF Scores") %>%  kable_styling(latex_options = "HOLD_position",wraptable_width = "float_left")
+
+kable(vif(glm(TARGET_FLAG ~. -TARGET_AMT      , training,family = binomial )), format = 'latex',caption = "Logistic Model VIF Scores" ) %>% kable_styling(latex_options = "HOLD_position",wraptable_width = "float_right")
 ```
 
-#Variance Inflation of Binary Logistic Regression Model
-```{r}
-vif(glm(TARGET_FLAG ~. -TARGET_AMT      , training,family = binomial ))
-```
 
+
+
+
+\newpage 
 
 # DATA PREPARATION
 
-We seem to have an error in one of the values for "CAR_AGE", which is -3. As we know this must be a mistake, we will turn it into a missing value.
+|   We seem to have an error in one of the values for "CAR_AGE", which is -3. As we know this must be a mistake, we will turn it into a missing value.
 
 ```{r}
 training$CAR_AGE[training$CAR_AGE <0] <- NA
 ```
 
 
-Since the following variables with missing data ("INCOME", "YOJ", "HOME_VAL", and "CAR_AGE") are showing skewness in their distribution, we have decided to use the median as the replacement of the missing values. This will allow us to avoid any bias introduced to the mean due to the skewness itself. 
+|   Since the following variables with missing data ("INCOME", "YOJ", "HOME_VAL", and "CAR_AGE") are showing skewness in their distribution, we have decided to use the median as the replacement of the missing values. This will allow us to avoid any bias introduced to the mean due to the skewness itself. 
 
 ```{r}
-
-
 
 training <- training %>% mutate(across(where(is.numeric), ~case_when(is.na(.) ~median.default(.,na.rm = TRUE), T~.  )),
                                  JOB= case_when(
@@ -314,7 +334,7 @@ evaluation <- evaluation %>% mutate(across(where(is.numeric), ~case_when(is.na(.
 ```
 
 
-We then construct our training sets for our models below.
+|   We then constructed our training sets for modeling. The linear model will only be trained on the data where an accident has occurred. We chose this approach as we do not want a model that will predict that it is possible to have no insurance cost after an accident. THe logistic model will contain all the variable, with the exception of the TARGET_AMT. 
 
 
 
@@ -328,30 +348,28 @@ glm_training <-  training %>%
 ```
 
 
+## Transforming Predictors 
 
-We will next take a look at some of the variables and see what transformations may be used.
+|   We will next take a look at some of the variables and see what transformations may be used. 
 
-INCOME
+| **INCOME**
 
-Income is a right skewed variable with a significant number zeroes. We will apply the square root transformation suggested by the box-cox function to the original variable to reduce the overall skewness.
+|   Income is a right skewed variable with a significant number zeroes. We will apply the square root transformation suggested by the box-cox function to the original variable to reduce the overall skewness.
 
 
 
 ```{r}
-
-
 lam_inc <- boxcoxfit((training$INCOME+1))$lambda 
-
-
 
 ggplot(training, aes((INCOME+1)^lam_inc)) + geom_histogram(fill = 'gray', binwidth = 10, color = 'darkgray' ) + 
  theme_classic() + labs(title = 'Histogram of INCOME Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
 
 
-YOJ
+| **YOJ**
 
-Years on the job seems to have a bimodal distribution with a large number of customers with 0-1 years. We have applied the suggested transformation to the variable to bring it closer to normality.
+|   Years on the job seems to have a bimodal distribution with a large number of customers with 0-1 years. We have applied the suggested transformation to the variable to bring it closer to normality.
+
 
 ```{r}
 lam_YOJ <- boxcoxfit(training$YOJ+1)$lambda
@@ -360,9 +378,9 @@ ggplot(training, aes((YOJ+1)^1.48)) + geom_histogram(fill = 'gray', binwidth = 1
  theme_classic() + labs(title = 'Histogram of YOJ Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
 
-HOME_VAL
+| **HOME_VAL**
 
-Home values are also moderately right skewed with a significant number of zeroes. We have applied the suggested transformation to this variable to reduce the overall skewness but as you can see below, it does not help much because of the significant number of 0 values in our data.
+|   Home values are also moderately right skewed with a significant number of zeroes. We have applied the suggested transformation to this variable to reduce the overall skewness but as you can see below, it does not help much because of the significant number of 0 values in our data.
 
 ```{r}
 lam_home <- boxcoxfit(training$HOME_VAL+1)$lambda
@@ -371,9 +389,9 @@ ggplot(training, aes((HOME_VAL+1)^lam_home)) + geom_histogram(fill = 'gray', bin
  theme_classic() + labs(title = 'Histogram of HOME_VAL Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
 
-CAR_AGE
+| **CAR_AGE**
 
-The age of the cars follow a bimodal distribution because of the significant number of cars that are close to 0 or 1 year of age. We have applied the suggested transformation, but again as we can see below, it has not helped much.
+|   The age of the cars follow a bimodal distribution because of the significant number of cars that are close to 0 or 1 year of age. We have applied the suggested transformation, but again as we can see below, it has not helped much.
 
 ```{r}
 lam_car_a <- boxcoxfit((training$CAR_AGE+1))$lambda
@@ -382,9 +400,9 @@ ggplot(training, aes((CAR_AGE+1)^lam_car_a )) + geom_histogram(fill = 'gray', bi
  theme_classic() + labs(title = 'Histogram of HOME_VAL Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
 
-BLUEBOOK
+| **BLUEBOOK**
 
-The blue book variable is moderately right skewed. We'll apply the suggested transformation by the box-cox function.
+|   The blue book variable is moderately right skewed. We'll apply the suggested transformation by the box-cox function.
 
 ```{r}
 blu_lam <- boxcoxfit(training$BLUEBOOK+1)$lambda
@@ -393,9 +411,9 @@ ggplot(training, aes((BLUEBOOK+1)^blu_lam)) + geom_histogram(fill = 'gray', binw
  theme_classic() + labs(title = 'Histogram of BLUEBOOK Transformed') + theme(plot.title = element_text(hjust = 0.5))
 ```
 
-OLDCLAIM
+| **OLDCLAIM**
 
-Old claim is has an extremely right skewed distribution. We'll apply a log  transformation to reduce the overall skewness.
+|   Old claim is has an extremely right skewed distribution. We'll apply a log  transformation to reduce the overall skewness.
 
 ```{r}
 
@@ -404,7 +422,7 @@ ggplot(training, aes(log(OLDCLAIM+1))) + geom_histogram(fill = 'gray', binwidth 
 ```
 
 
-We then construct a training data set inclusive of our desired transformations.
+|   We then construct a training data set inclusive of our desired transformations.  We used the 'dplyr' libraries mutate and across functionality to quickly and efficiently create a variety of transformations. 
 
 
 ```{r}
@@ -430,7 +448,7 @@ evaluation_transform_glm <- evaluation   %>%
 
 ```
 
-Test the skewness of the various "TARGET_AMT" variables. Appears that the log and Standard Box Cox Transformation have the least skewing. 
+|   We can now compare the skewness of the various "TARGET_AMT" variables. It appears that the log and Standard Box-Cox transformation have the least skewing. 
 
 ```{r}
 list  = c(skewness(lm_training$TARGET_AMT),
@@ -445,13 +463,25 @@ skewness(lm_training_transform$TARGET_AMT_lam_two) )
 
 
 
-kable(tibble( Transformation = c("Original","Square Root","Log", "Box Cox Standard","Alternate Box Cox"), Skewness =list),caption =("Skewness Values for TARGET_AMT"),format = "pdf")
-
 
 ```
 
 
-We partition our data to train our models and test the accuracy and performance of our constructed models.
+```{r}
+kable(tibble( Transformation = c("Original","Square Root","Log", "Box Cox Standard","Alternate Box Cox"), Skewness =list),format = 'latex',caption ="Skewness Values for Target Amt Variable")  %>% kable_styling(latex_options = "HOLD_position")
+
+```
+
+
+
+\newpage
+
+# Model Building
+
+
+## Building Logistic Models
+
+|   We begin the model building process by creating a partition of our data to train our models. Doing so allows us to test the accuracy and performance of our constructed models.
 
 
 ```{r}
@@ -469,26 +499,30 @@ glm_additional_test_tran <- glm_training_transform[-glm_train_index_tran,]
 
 
 
-Post transformation the variable application has become statistically significant and we can begin to use a process of backward elimination for variable selection.
+|   For the first logistic model, we construct it using the untransformed data. 
 
-Model 2 we use the step function to apply backward elimination.
+
 
 
 ```{r}
-glm_mod1 = glm(TARGET_FLAG ~., data = glm_additional_train, family = binomial(link='logit'))
+glm_mod1 = glm(TARGET_FLAG ~., data = glm_additional_train, family = binomial)
+
 ```
+
+
 
 
 ```{r}
 summary(glm_mod1)
 ```
 
+\newpage
 
-
+|   We then use the "stepAIC" function from the MASS library to find the best model for our data.
 
 
 ```{r,eval=F}
-fit_1 = step(glm_mod1,direction="both",trace=FALSE)
+fit_1 = stepAIC(glm_mod1,direction="both",trace=FALSE)
 
 ```
 
@@ -506,10 +540,15 @@ fit_1 <- readRDS("fit_1")
 ```
 
 
+
+
+
 ```{r}
 summary(fit_1)
 ```
 
+\newpage 
+|   For our second model, we construct it using the transformed variables we created.
 
 
 ```{r}
@@ -525,7 +564,7 @@ summary(glm_mod2)
 
 
 ```{r,eval=F}
-fit_2 <- step(glm_mod2,direction="both",trace=FALSE)
+fit_2 <- stepAIC(glm_mod2,direction="both",trace=FALSE)
 ```
 
 
@@ -541,6 +580,10 @@ fit_2 <- readRDS("fit_2")
 ```
 
 
+\newpage
+
+|   We then use "stepAIC" again to find the best model, shown below.
+
 
 ```{r}
 summary(fit_2)
@@ -548,8 +591,12 @@ summary(fit_2)
 ```
 
 
-Now that the binary logistic regression model is constructed we can proceed to 
-the linear regression model not using any transformations.
+\newpage 
+
+## Building Linear Models 
+
+|   Now that the binary logistic regression model is constructed we can proceed to our linear models. We do the same process as before, partitioning our data and then beginning with a simple linear model with no transformations.
+
 
 
 ```{r}
@@ -562,18 +609,18 @@ lm_additional_test <- lm_training[-lm_train_index,]
 
 
 
-
-
-
 ```{r}
 lm_one <- lm(TARGET_AMT~.,lm_additional_train)
 ```
+
 
 ```{r}
 summary(lm_one)
 ```
 
-We then use STEPAIC function from the MASS package to find the best model.
+\newpage
+
+|   We then use the "stepAIC" function again to find the best model.
 
 
 ```{r}
@@ -587,8 +634,7 @@ test <- stepAIC(lm_one,direction = "both",trace = F)
 summary(test)
 ```
 
-
-We find that our residuals are highly skewed 
+ 
 
 
 ```{r}
@@ -600,7 +646,9 @@ lm_additional_test_trans_lam <- lm_training_transform[-lm_train_index_tran_lam,]
 ```
 
 
+\newpage 
 
+|   In the second model, we use the transformed "TARGET_AMT" variable "TARGET_AMT_lam_one" and the transformed predictors to see if we can find a better fitting model. 
 
 ```{r}
 lm_two <- lm(TARGET_AMT_lam_one~.-TARGET_AMT-TARGET_AMT_lam_two-TARGET_AMT_sqrt-TARGET_AMT_log,lm_additional_train_trans_lam)
@@ -609,11 +657,15 @@ lm_two <- lm(TARGET_AMT_lam_one~.-TARGET_AMT-TARGET_AMT_lam_two-TARGET_AMT_sqrt-
 
 
 
+
 ```{r}
 summary(lm_two)
 ```
 
 
+\newpage 
+
+|   Performing "stepAIC" we get this for our final linear model.
 
 
 ```{r}
@@ -628,13 +680,15 @@ test_two <- stepAIC(lm_two,direction = "both",trace = F)
 summary(test_two)
 ```
 
+\newpage
+
 
 # Model Selection
 
 
 ## Binary Model Selecion
 
-We can predict results to discern performance metrics.
+|   We can predict results to discern performance metrics.
 
 
 
@@ -718,7 +772,10 @@ summary(lm_training$TARGET_AMT)
 postResample(pred = predict(test,lm_additional_test), obs =lm_additional_test$TARGET_AMT)
 ```
 
-|    Model two is no longer skewed, and while the R-Squared is small, is now above one percent accuracy. Far better than the first model 
+\newpage
+
+
+|    We can see belkw that model two is no longer skewed, and while the R-Squared is small, is now above one percent accuracy. Far better than the first model 
 
 
 ```{r}
@@ -728,17 +785,14 @@ hist(test_two$residuals)
 skewness(test_two$residuals)
 ```
 
+ 
 
-
-Using model two for both our binary logistic model and our
-our linear regression model, we update our evaluation data set 
-with the final required predictions.
 
 
 ```{r}
 
 eval_mod_2 <- evaluation
-eval_mod_2$TARGET_AMT <-  predict.lm(test_two,  newdata=evaluation_transform)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda)
+eval_mod_2$TARGET_AMT <-  predict.lm(test_two,  newdata=evaluation_transform_lm)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda)
 
 hist(training$TARGET_AMT)
   
@@ -760,29 +814,45 @@ postResample(pred = predict(test_two,lm_additional_test_trans_lam)^(1/boxcoxfit(
 ```
 
 
+
+\newpage 
+
+
+## Making Predictions for the Evaluation Data
+
+|   Using model two for both our binary logistic model and our our linear regression model, we update our evaluation data set with the final required predictions. We can now see how our evaluation predictions look below. 
+
+
+
 ```{r}
-  evaluation$TARGET_FLAG <- round(predict(fit_2,newdata = evaluation_transform_glm,type = "response"))
+evaluation$TARGET_FLAG <- round(predict(fit_2,newdata = evaluation_transform_glm,type = "response"))
 
 
 
 evaluation  <- evaluation %>% mutate(TARGET_AMT = case_when( TARGET_FLAG ==1 ~  predict.lm(test_two,  newdata=evaluation_transform_lm)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda),T~0) )
 
-
+evaluation$TARGET_FLAG <- as.factor(evaluation$TARGET_FLAG)
 ```
+
+
+
+```{r}
+kable (describe((evaluation %>%  select(where(is.numeric))),skew=F),format = "latex") %>%
+  kable_styling(full_width = F,position = "left")
+evaluation %>% plot_histogram()
+
+evaluation %>% plot_boxplot(by="TARGET_FLAG")
+```
+
 
 
 
 ```{r,eval=F}
-#write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
+write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
 ```
+
+\newpage
 
 # Conclusion
 
-The underlying nature of this data set had a few subtle complexities. In the way
-of modifications, there was a need to use regular expressions and re coded factors
-in order to make the data more interpretable to our models. In addition, there
-was a large focus on transforming our variables to smooth out the distributions
-and reduce skewness. After processing the data and transforming the necessary
-variables, we were able to determine that the second iteration of our models
-performed the best. It most accurately interpreted the data and seemed best
-poised to deal data abstractions.
+|   The underlying nature of this data set had a few subtle complexities. In the way of modifications, there was a need to use regular expressions and re coded factors in order to make the data more interpretable to our models. In addition, there was a large focus on transforming our variables to smooth out the distributions and reduce skewness. After processing the data and transforming the necessary variables, we were able to determine that the second iteration of our models performed the best. It most accurately interpreted the data and seemed best poised to deal data abstractions.
