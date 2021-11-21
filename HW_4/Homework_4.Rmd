@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = F)
+knitr::opts_chunk$set(warning = F,message = F,comment=NA,echo=F)
 ```
 
 ```{r}
@@ -470,9 +470,14 @@ glm_training_transform  <- glm_training  %>%
 
 
 
-evaluation_transform  <- evaluation   %>% 
+evaluation_transform_lm  <- evaluation   %>% 
  
    mutate(across(where(is.numeric) ,list(lam_one= ~((.+1)^boxcoxfit(lm_training$.+1)$lambda) ,   lam_two=   ~BoxCox(., BoxCox.lambda(lm_training$.) ) , sqrt= ~sqrt(.), log = ~log(.+1))  ) )  
+
+
+evaluation_transform_glm <- evaluation   %>% 
+ 
+   mutate(across(where(is.numeric) ,list(lam_one= ~((.+1)^boxcoxfit(glm_training$.+1)$lambda) ,   lam_two=   ~BoxCox(., BoxCox.lambda(glm_training$.) ) , sqrt= ~sqrt(.), log = ~log(.+1))  ) )  
 
 ```
 
@@ -726,7 +731,7 @@ results_model_one = round(predict.glm(fit_1,newdata = glm_additional_test,type =
  
 
 
-results_model_two = round(predict(fit_2,newdata = `glm_additional_test_tran`,type = "response"))
+results_model_two = round(predict(fit_2,newdata = glm_additional_test_tran,type = "response"))
 ```
 
 
@@ -781,7 +786,7 @@ skewness(test$residuals)
 
 
 ```{r}
-  eval_mod <- evaluation
+eval_mod <- evaluation
 eval_mod$TARGET_AMT <-  predict.lm(test,  newdata=evaluation)
 
 hist(training$TARGET_AMT)
@@ -837,4 +842,20 @@ summary(lm_training$TARGET_AMT)
 postResample(pred = predict(test_two,lm_additional_test_trans_lam)^(1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda), obs =lm_additional_test_trans_lam$TARGET_AMT)
 ```
 
+
+```{r}
+  evaluation$TARGET_FLAG <- round(predict(fit_2,newdata = evaluation_transform_glm,type = "response"))
+
+
+
+evaluation  <- evaluation %>% mutate(TARGET_AMT = case_when( TARGET_FLAG ==1 ~  predict.lm(test_two,  newdata=evaluation_transform_lm)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda),T~0) )
+
+
+```
+
+
+
+```{r,eval=F}
+write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
+```
 
