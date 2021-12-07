@@ -3,28 +3,289 @@ title: "Final_Project_DATA621"
 author: "Hector Santana, Mario Pena, Zachary Safir"
 date: "12/4/2021"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r libraries}
+library(RPostgres)
+library(DBI)
+library(dbplyr)
+library(dplyr)
+library(ggplot2)
+library(imputeTS)
+library(moments)
+library(glmnet)
+pacman::p_load(MASS,tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,geoR,caret,
+               psych,gridExtra,DMwR2,lmtest,pscl,MKmisc,ROCR,survey,stats,rstatix,Rcpp,
+               corrplot,forecast,cowplot,gridExtra,arsenal,e1071,car)
+#https://drive.google.com/file/d/1jp02s0hPSgT7MfvjYjfpIlNuXnnGQUdk/view?usp=sharing
 ```
 
-## R Markdown
+```{r load_data}
+training = read.csv('')
+evaluation = read.csv('')
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+for(i in colnames(training[sapply(training, is.numeric)] %>% select(-SK_ID_CURR))){
+  if(length(unique(training[,i]))<=5){
+    training[,i] = as.factor(training[,i])
+  }
+}
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+  
+training[sapply(training, is.character)] <- lapply(training[sapply(training, is.character)], 
+                                       as.factor)
+training$CNT_CHILDREN = as.factor(training$CNT_CHILDREN)
 
-```{r cars}
-summary(cars)
+training = training %>% select(-c('AMT_REQ_CREDIT_BUREAU_DAY','AMT_REQ_CREDIT_BUREAU_WEEK','AMT_REQ_CREDIT_BUREAU_MON','AMT_REQ_CREDIT_BUREAU_QRT','AMT_REQ_CREDIT_BUREAU_HOUR','AMT_REQ_CREDIT_BUREAU_YEAR' ))    
+
+str(training)
 ```
 
-## Including Plots
+```{r data_exploration}
 
-You can also embed plots, for example:
+des = describe((training %>% select(where(is.numeric))))
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+plot_missing(training)
+training = training[, which(colMeans(!is.na(training)) > 0.6)]
+training = imputeTS::na_mean(training,option = "median")
+plot_missing(training)
+```
+
+```{r}
+quant_var <- split_columns(training%>% select(-SK_ID_CURR))
+plot_histogram(quant_var$continuous)
+```
+
+```{r}
+plot_bar(quant_var$discrete)
+
+```
+
+```{r}
+plot_density(quant_var$continuous)
+```
+
+```{r}
+plot_boxplot(
+  data = training,
+  by = "TARGET") 
+```
+
+
+```{r}
+
+for( i in colnames(training[sapply(training, is.factor)])){
+  print(i)
+  print(table(training[,i], TARGET_FLAG=training$TARGET))
+}
+
+```
+
+```{r}
+corr_simple <- function(data=df,sig=0.5){
+  
+  library(corrplot)
+  #convert data to numeric in order to run correlations
+  #convert to factor first to keep the integrity of the data - each value will become a number rather than turn into NA
+  df_cor <- data %>% mutate_if(is.character, as.factor)
+  df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)  #run a correlation and drop the insignificant ones
+  corr <- cor(df_cor)
+  #prepare to drop duplicates and correlations of 1     
+  corr[lower.tri(corr,diag=TRUE)] <- NA 
+  #drop perfect correlations
+  corr[corr == 1] <- NA   #turn into a 3-column table
+  corr <- as.data.frame(as.table(corr))
+  #remove the NA values from above 
+  corr <- na.omit(corr)   #select significant values  
+  corr <- subset(corr, abs(Freq) > sig) 
+  #sort by highest correlation
+  corr <- corr[order(-abs(corr$Freq)),]   #print table
+  print(corr)  #turn corr back into matrix in order to plot with corrplot
+  mtx_corr <- reshape2::acast(corr, Var1~Var2, value.var="Freq")
+  
+  #plot correlations visually
+  par( cex= 0.9,mar=c(6,4,6,4) )
+  corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ",number.cex= 7/ncol(corr))
+}
+
+corr_simple(training)
+```
+
+```{r}
+
+
+for(i in colnames(training[sapply(training, is.numeric)] %>% select(-SK_ID_CURR))){
+  if ((skewness(training[,i])>.5) & (skewness(training[,i])<1)){
+    training[,i] = sqrt(training[,i])
+  } else if ((skewness(training[,i])>=1) & (skewness(training[,i])<1.3)){
+    training[,i] = log10(training[,i])
+  } else if (skewness(training[,i])>=1.3){
+    training[,i] = ifelse(skewness(training[,i])>0,1/training[,i],1/(max(training[,i]+1)-training[,i]))}
+  }
+
+```
+
+
+```{r}
+
+plot_density(training%>% select(-SK_ID_CURR))
+```
+
+
+```{r}
+
+set.seed(120)
+
+
+glm_train <- createDataPartition(training$TARGET, p=.8, list=FALSE, times = 1)
+glm_test <- training[-glm_train,]
+glm_train <- training[glm_train,]
+
+str(glm_train)
+str(glm_test)
+```
+
+
+```{r}
+glm_mod1 = glm(TARGET ~., data = (glm_train%>%select(-CNT_CHILDREN)), family = binomial(link='logit'))
+summary(glm_mod1)
+```
+
+
+
+```{r}
+df_cor <- training %>% mutate_if(is.character, as.factor)
+df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)  #run a correlation and drop the insignificant ones
+corr <- cor(df_cor)
+#prepare to drop duplicates and correlations of 1     
+corr[lower.tri(corr,diag=TRUE)] <- NA 
+#drop perfect correlations
+corr[corr == 1] <- NA   #turn into a 3-column table
+corr <- as.data.frame(as.table(corr))
+#remove the NA values from above 
+corr <- na.omit(corr)   #select significant values  
+corr <- subset(corr, abs(Freq) > .5) 
+#sort by highest correlation
+corr <- corr[order(-abs(corr$Freq)),]   #print table
+gmmod2_traing <- glm_train %>% select("SK_ID_CURR","TARGET",corr$Var1)
+
+```
+
+
+```{r}
+glm_mod2 = glm(TARGET ~., data = gmmod2_traing, family = binomial(link='logit'))
+summary(glm_mod2)
+```
+
+```{r}
+fit_2 = stepAIC(glm_mod2,direction="both",trace=FALSE)
+summary(fit_2)
+```
+
+```{r}
+x <- model.matrix(TARGET~., glm_train)[,-1]
+y <- glm_train$TARGET
+
+
+set.seed(123)
+cv.lasso <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+plot(cv.lasso)
+```
+
+
+```{r}
+cv.lasso$lambda.min
+cv.lasso$lambda.1se
+coef(cv.lasso, cv.lasso$lambda.min)
+coef(cv.lasso, cv.lasso$lambda.1se)
+```
+
+
+```{r}
+lasso.model <- glmnet(x, y, alpha = 1, family = "binomial",
+                      lambda = cv.lasso$lambda.1se,exact=FALSE)
+
+# Make prediction on test data
+x.test <- model.matrix(TARGET ~., glm_test)[,-1]
+probabilities <- lasso.model %>% predict(newx = x.test,type='response')
+predicted.classes <- ifelse(probabilities >= 0.5, 1, 0)
+# Model accuracy
+observed.classes <- glm_test$TARGET
+glmnet_accuracy <- mean(predicted.classes == observed.classes)
+
+## Mod1 accuracy
+glm1_probs <- glm_mod1 %>% predict(glm_test,type='response')
+glm1_predicted.classes <- ifelse(glm1_probs >= 0.5, 1, 0)
+glm1observed.classes <- glm_test$TARGET
+glmmod1_accuracy <- mean(glm1_predicted.classes == glm1observed.classes)
+
+
+## Mod2 accuracy
+glm2_probs <- fit_2 %>% predict(glm_test,type='response')
+glm2_predicted.classes <- ifelse(glm2_probs >= 0.5, 1, 0)
+glm2observed.classes <- glm_test$TARGET
+glmmod2_accuracy <- mean(glm2_predicted.classes == glm2observed.classes)
+
+
+```
+
+```{r}
+confusionMatrix(data=as.factor(predicted.classes), glm_test$TARGET)
+confusionMatrix(data=as.factor(glm1_predicted.classes), glm_test$TARGET)
+confusionMatrix(data=as.factor(glm2_predicted.classes), glm_test$TARGET)
+```
+
+
+```{r}
+
+glm_pred_one <- prediction(probabilities, glm_test$TARGET)
+glm_perf_one <- performance(glm_pred_one, measure = "tpr", x.measure = "fpr")
+glm_auc_mod1 <- performance(glm_pred_one, measure = "auc")
+glm_auc_mod1 <- glm_auc_mod1@y.values[[1]]
+plot(glm_perf_one)
+print(glm_auc_mod1)
+```
+
+
+```{r}
+
+glm_pred_two <- prediction(glm1_probs, glm_test$TARGET)
+glm_perf_two <- performance(glm_pred_two, measure = "tpr", x.measure = "fpr")
+glm_auc_mod2 <- performance(glm_pred_two, measure = "auc")
+glm_auc_mod2 <- glm_auc_mod2@y.values[[1]]
+plot(glm_perf_two)
+print(glm_auc_mod2)
+```
+
+```{r}
+evaluation$TARGET <- round(predict(lasso.model,newdata = model.matrix(evaluation),type = "response"))
+tempcoef =coef(lasso.model)
+coefdf =  data.frame(as.matrix(tempcoef))
+
+evaluation  <- evaluation %>% mutate(TARGET_AMT = case_when( TARGET_FLAG ==1 ~  predict.lm(test_two,  newdata=evaluation_transform_lm)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda),T~0) )
+
+evaluation$TARGET_FLAG <- as.factor(evaluation$TARGET_FLAG)
+```
+
+
+
+```{r}
+kable (describe((evaluation %>%  select(where(is.numeric))),skew=F),format = "latex") %>%
+  kable_styling(full_width = F,position = "left")
+evaluation %>% plot_histogram()
+
+evaluation %>% plot_boxplot(by="TARGET_FLAG")
+```
+
+
+
+
+```{r,eval=F}
+write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
+```
