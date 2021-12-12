@@ -1,13 +1,92 @@
 ---
-title: "Final_Project_DATA621"
+title: "Final Project DATA 621"
 author: "Hector Santana, Mario Pena, Zachary Safir"
 date: "12/4/2021"
 output: pdf_document
-editor_options: 
-  chunk_output_type: console
 ---
 
-```{r libraries}
+# Abstract
+
+|   Credit risk is essential to the modern financial world. It is the backbone for underwriting, loss mitigation, 
+and the overall issuance of debt. Without strict monitoring, policies, and analytics, potential expected losses can be astronomical.
+
+|   These same stringent policies and procedures can however be too narrow. Traditional models may exclude worthy applicants based on the type of data used. That is why alternative data is being used more heavily. It expands the criteria to potential applicants that would’ve otherwise been excluded from the process. How does one discern the best set of alternative variables? Here we work to solve this problem by analyzing credit risk data sets posted on Kaggle by the Home Credit Group.
+
+|   The training data set provides 176 variables to choose from in order to discern which loans will face default issues and which will not. The ability to predict the possibility of default based on a subset of key variables will help underwriters issue secure loans to a wider applicant pool.
+
+# Key Words
+
+- Credit Risk
+- Predictive Modeling
+- Loan Level Analysis
+- Structured Credit
+- Predictive Analytics
+
+# Introduction
+
+|   Data science has revolutionized the modern world. The ability to extract useful and powerful insights from a data set has become a differentiator for top performers across a variety of industries. With that said, one industry that has lagged behind is finance. There has been a slow adoption of new technologies and techniques to analyze, dissect, and execute on data driven decisions. There is still a dependency on archaic processes, "intuition," and excel based models. One area in particular that has been resistant to change is credit. Loan level analytics, predictive models, and new technologies have only recently been applied to the industry. With the change in approach people have now begun to question whether traditional frameworks are the most operable in today's financial landscape.
+
+|   That is where our group asked a fundamental question, are credit risk methodologies up to par with today's diverse applicant pool? The answer is no. Traditional models do not capture a large segment of the global population. People that do not have existing credit lines or traditional bank accounts are often excluded from the process even if they have proof of income or savings. That lead us to investigate existing problems and ultimately allowed us to find a Kaggle data set from Home Credit Group that permitted us to tackle this problem.
+
+|   We set out to see if we could discern the best set of variables to predict whether an applicant would struggle with their loan payments or not. We studied relevant literature, modeling techniques, and read the data dictionary for the respective data set to decide on a best approach to solving this problem.
+
+|   At the end of the day no one wants to loan money to someone who cannot meet their obligation and thus we set out to see if we can answer this question.
+
+# Literature Review
+
+|   Since the 2008 financial crisis, credit risk management has been at the  forefront of finance. From regulators to banks, everyone has been looking for ways to create robust and accurate credit models to prevent the next disaster. (Lu, Zhang, and Li 2019)
+
+|   More recently financial services firms, including many FinTech companies, have turned their attention to the unbanked community. (Lu, Zhang, and Li 2019) This pool of applicants does not get captured in traditional processes and thus gets excluded from the applicant pool for products such as loans. There has been a heavy investment in developing robust alternative data sets with a wide range of characteristics to meet modeling standards. (Lu, Zhang, and Li 2019)
+
+|   The fast paced change in the financial landscape brings and ever greater focus on this problem. Preventing model bias and being able to accurately determine whether applicants can meet their loan payments are essential to today's credit risk management process. (Lu, Zhang, and Li 2019)
+
+# Methodology
+
+|   The training set for this data was extremely large. This required significant data exploration and preparation. Factor application to the data frame required deep analysis of the underlying variable values, and transformations that fit the data set.Several variables had ~50% and greater missing values thus requiring their removal from the analysis. Several other variables had ~20% or less missing values and were imputed using the median value. Transformations involved a combination of square root,log, and normalization functions based on the level of skewness in key numerical variables. A number of variables exhibited extreme skew and they needed to be changed in order for the models to interpret less erratic data.
+
+|   Three models were created: 
+- A saturated binary logistic regression model
+- A logistic regression model parsed for the highest correlating variables and using the stepAIC methodology for variable selection
+- A Lasso Logistic Regression model utilizing variable penalization for optimal variable selection.
+
+
+# Experimentation and Results
+
+|   Based on accuracy and AUC the optimal model was selected. The glmnet model was selected because the algorithm operates to achieve a sparse solution. Simplified models perform better overall and prevent over fitting. Accuracy was only marginally affected for this model versus the saturated logistic regression model. AUC was ~73% and only marginally different for the glmnet model versus the saturated model. The stepAIC model calculated all 0s and was therefore not applicable for this analysis.
+
+
+# Conclusion
+
+|   A total of 23 variables of the 176 variables were significant to the glmnet model. These variables are alternative data points that can be considered for loan issuance. The credit risk process can be further enhanced with alternative data as traditional models are too narrow in scope.Using a robust modeling process for the size, complexity, and dimensionality of credit risk data is essential to obtaining interpretable results. 
+
+| Reference the appendix for analytics and the variable list discerned by the model.
+
+
+# References
+
+Roeder, Jan. ALTERNATIVE DATA FOR CREDIT RISK MANAGEMENT: AN ANALYSIS OF THE
+CURRENT STATE OF RESEARCH. University of Goettingen, Faculty of Business and
+Economics, Goettingen, Germany. Retrieved From: 
+https://press.um.si/index.php/ump/catalog/view/581/744/1598-3
+
+Friedman, Jerome; Hastie, Trevor; Tibshirani, Rob.(April 29th, 2009)
+Regularization Paths for Generalized Linear Models via Coordinate Descent.
+Department of Statistics, Stanford University. Retrieved from:
+https://hastie.su.domains/Papers/glmnet.pdf
+
+Lu, Tian; Zhang, Yingjie; and Li, Beibei, "The Value of Alternative 
+Data in Credit Risk Prediction: Evidence from a Large Field Experiment" (2019). 
+ICIS 2019 Proceedings. 10. Retrieved From:
+https://core.ac.uk/download/pdf/301383651.pdf.
+
+
+# Appendix: R Code and Analytics
+
+
+```{r libraries, message=FALSE}
+
+# import libraries
+
 library(RPostgres)
 library(DBI)
 library(dbplyr)
@@ -16,15 +95,23 @@ library(ggplot2)
 library(imputeTS)
 library(moments)
 library(glmnet)
-pacman::p_load(MASS,tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,geoR,caret,
-               psych,gridExtra,DMwR2,lmtest,pscl,MKmisc,ROCR,survey,stats,rstatix,Rcpp,
+pacman::p_load(MASS,tidyverse,janitor,DataExplorer,knitr,arsenal,kableExtra,car,
+               geoR,caret,
+               psych,gridExtra,DMwR2,lmtest,pscl,MKmisc,ROCR,survey,stats,
+               rstatix,Rcpp,
                corrplot,forecast,cowplot,gridExtra,arsenal,e1071,car)
-#https://drive.google.com/file/d/1jp02s0hPSgT7MfvjYjfpIlNuXnnGQUdk/view?usp=sharing
+
 ```
 
-```{r load_data}
-training = read.csv('')
-evaluation = read.csv('')
+```{r load_data, echo=FALSE}
+#import data
+
+training = read.csv('PATH')
+
+```
+
+```{r}
+#factor application to training data and removal of problematic variables
 
 for(i in colnames(training[sapply(training, is.numeric)] %>% select(-SK_ID_CURR))){
   if(length(unique(training[,i]))<=5){
@@ -33,45 +120,79 @@ for(i in colnames(training[sapply(training, is.numeric)] %>% select(-SK_ID_CURR)
 }
 
   
-training[sapply(training, is.character)] <- lapply(training[sapply(training, is.character)], 
+training[sapply(training, is.character)] <- lapply(training[sapply(training, 
+                                                                   is.character)], 
                                        as.factor)
 training$CNT_CHILDREN = as.factor(training$CNT_CHILDREN)
 
-training = training %>% select(-c('AMT_REQ_CREDIT_BUREAU_DAY','AMT_REQ_CREDIT_BUREAU_WEEK','AMT_REQ_CREDIT_BUREAU_MON','AMT_REQ_CREDIT_BUREAU_QRT','AMT_REQ_CREDIT_BUREAU_HOUR','AMT_REQ_CREDIT_BUREAU_YEAR' ))    
+training = training %>% select(-c('AMT_REQ_CREDIT_BUREAU_DAY',
+                                  'AMT_REQ_CREDIT_BUREAU_WEEK',
+                                  'AMT_REQ_CREDIT_BUREAU_MON',
+                                  'AMT_REQ_CREDIT_BUREAU_QRT',
+                                  'AMT_REQ_CREDIT_BUREAU_HOUR',
+                                  'AMT_REQ_CREDIT_BUREAU_YEAR' ))    
+
+```
+
+```{r}
+#structure of dataset
 
 str(training)
 ```
 
 ```{r data_exploration}
+#descriptive statistics of dataset
 
 des = describe((training %>% select(where(is.numeric))))
-
+des
 
 ```
 
 
 ```{r}
+# pre-transformation missing data plot
+
 plot_missing(training)
+```
+
+
+```{r}
+# Clean/remove columns with missing data 
+
 training = training[, which(colMeans(!is.na(training)) > 0.6)]
 training = imputeTS::na_mean(training,option = "median")
+```
+
+
+```{r}
+# Post transformation missing data plot
+
 plot_missing(training)
 ```
 
 ```{r}
+# Histogram plot
+
 quant_var <- split_columns(training%>% select(-SK_ID_CURR))
 plot_histogram(quant_var$continuous)
 ```
 
 ```{r}
+# Bar Plot
+
 plot_bar(quant_var$discrete)
 
 ```
 
 ```{r}
+# Density Plot
+
 plot_density(quant_var$continuous)
 ```
 
 ```{r}
+# Boxplot
+
 plot_boxplot(
   data = training,
   by = "TARGET") 
@@ -79,6 +200,7 @@ plot_boxplot(
 
 
 ```{r}
+# Proportion tables
 
 for( i in colnames(training[sapply(training, is.factor)])){
   print(i)
@@ -88,57 +210,63 @@ for( i in colnames(training[sapply(training, is.factor)])){
 ```
 
 ```{r}
+# Correlation Function
+
 corr_simple <- function(data=df,sig=0.5){
   
   library(corrplot)
-  #convert data to numeric in order to run correlations
-  #convert to factor first to keep the integrity of the data - each value will become a number rather than turn into NA
   df_cor <- data %>% mutate_if(is.character, as.factor)
-  df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)  #run a correlation and drop the insignificant ones
+  df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)
   corr <- cor(df_cor)
-  #prepare to drop duplicates and correlations of 1     
   corr[lower.tri(corr,diag=TRUE)] <- NA 
-  #drop perfect correlations
-  corr[corr == 1] <- NA   #turn into a 3-column table
+  corr[corr == 1] <- NA
   corr <- as.data.frame(as.table(corr))
-  #remove the NA values from above 
+   
   corr <- na.omit(corr)   #select significant values  
   corr <- subset(corr, abs(Freq) > sig) 
-  #sort by highest correlation
-  corr <- corr[order(-abs(corr$Freq)),]   #print table
-  print(corr)  #turn corr back into matrix in order to plot with corrplot
+  
+  corr <- corr[order(-abs(corr$Freq)),]   
+  print(corr)  
   mtx_corr <- reshape2::acast(corr, Var1~Var2, value.var="Freq")
   
-  #plot correlations visually
+  
   par( cex= 0.9,mar=c(6,4,6,4) )
   corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ",number.cex= 7/ncol(corr))
 }
+```
+
+```{r}
+#Correlation plot
 
 corr_simple(training)
 ```
 
 ```{r}
+# skewness transformation
 
-
-for(i in colnames(training[sapply(training, is.numeric)] %>% select(-SK_ID_CURR))){
+for(i in colnames(training[sapply(training, is.numeric)] %>% 
+                  select(-SK_ID_CURR))){
   if ((skewness(training[,i])>.5) & (skewness(training[,i])<1)){
     training[,i] = sqrt(training[,i])
   } else if ((skewness(training[,i])>=1) & (skewness(training[,i])<1.3)){
     training[,i] = log10(training[,i])
   } else if (skewness(training[,i])>=1.3){
-    training[,i] = ifelse(skewness(training[,i])>0,1/training[,i],1/(max(training[,i]+1)-training[,i]))}
+    training[,i] = ifelse(skewness(training[,i])>0,1/training[,i],
+                          1/(max(training[,i]+1)-training[,i]))}
   }
 
 ```
 
 
 ```{r}
+# Post skewness density plot
 
 plot_density(training%>% select(-SK_ID_CURR))
 ```
 
 
 ```{r}
+# Model Construction
 
 set.seed(120)
 
@@ -153,7 +281,8 @@ str(glm_test)
 
 
 ```{r}
-glm_mod1 = glm(TARGET ~., data = (glm_train%>%select(-CNT_CHILDREN)), family = binomial(link='logit'))
+glm_mod1 = glm(TARGET ~., data = (glm_train%>%select(-CNT_CHILDREN)), 
+               family = binomial(link='logit'))
 summary(glm_mod1)
 ```
 
@@ -161,18 +290,15 @@ summary(glm_mod1)
 
 ```{r}
 df_cor <- training %>% mutate_if(is.character, as.factor)
-df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)  #run a correlation and drop the insignificant ones
+df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)  
 corr <- cor(df_cor)
-#prepare to drop duplicates and correlations of 1     
 corr[lower.tri(corr,diag=TRUE)] <- NA 
-#drop perfect correlations
-corr[corr == 1] <- NA   #turn into a 3-column table
+
+corr[corr == 1] <- NA   
 corr <- as.data.frame(as.table(corr))
-#remove the NA values from above 
-corr <- na.omit(corr)   #select significant values  
+corr <- na.omit(corr)     
 corr <- subset(corr, abs(Freq) > .5) 
-#sort by highest correlation
-corr <- corr[order(-abs(corr$Freq)),]   #print table
+corr <- corr[order(-abs(corr$Freq)),]
 gmmod2_traing <- glm_train %>% select("SK_ID_CURR","TARGET",corr$Var1)
 
 ```
@@ -263,29 +389,3 @@ plot(glm_perf_two)
 print(glm_auc_mod2)
 ```
 
-```{r}
-evaluation$TARGET <- round(predict(lasso.model,newdata = model.matrix(evaluation),type = "response"))
-tempcoef =coef(lasso.model)
-coefdf =  data.frame(as.matrix(tempcoef))
-
-evaluation  <- evaluation %>% mutate(TARGET_AMT = case_when( TARGET_FLAG ==1 ~  predict.lm(test_two,  newdata=evaluation_transform_lm)^ (1/boxcoxfit(lm_training$TARGET_AMT+1)$lambda),T~0) )
-
-evaluation$TARGET_FLAG <- as.factor(evaluation$TARGET_FLAG)
-```
-
-
-
-```{r}
-kable (describe((evaluation %>%  select(where(is.numeric))),skew=F),format = "latex") %>%
-  kable_styling(full_width = F,position = "left")
-evaluation %>% plot_histogram()
-
-evaluation %>% plot_boxplot(by="TARGET_FLAG")
-```
-
-
-
-
-```{r,eval=F}
-write.csv(evaluation, "Evaluationt.csv",row.names = FALSE)
-```
