@@ -1,0 +1,457 @@
+---
+title: "Homework 5"
+author: "Hector Santana, Zachary Safir, Mario Pena"
+output:
+  pdf_document:
+    df_print: default
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F,message = F,comment=NA,echo=F)
+```
+
+```{r}
+pacman:::p_load(Amelia,MASS,tidyverse,DataExplorer,knitr,kableExtra,psych,mice,caret,naniar,summary,geoR,
+forecast)
+
+```
+
+\pagebreak
+
+# Introduction
+
+|   In this homework assignment, we will explore, analyze and model a data set containing information on approximately 12,000 commercially available wines. The variables are mostly related to the chemical properties of the wine being sold. The response variable is the number of sample cases of wine that were purchased by wine distribution companies after sampling a wine. These cases would be used to provide tasting samples to restaurants and wine stores around the United States. The more sample cases purchased, the more likely is a wine to be sold at a high end restaurant. A large wine manufacturer is studying the data in order to predict the number of wine cases ordered based upon the wine characteristics. If the wine manufacturer can predict the number of cases, then that manufacturer will be able to adjust their wine offering to maximize sales. 
+
+|   Our objective is to build a count regression model to predict the number of cases of wine that will be sold given certain properties of the wine.
+
+
+
+```{r Data Importation}
+training <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_5/wine-training-data.csv", header=TRUE, sep=",")[ ,-1]
+
+evaluation <- read.csv("https://raw.githubusercontent.com/manonfire86/Data621/main/HW_5/wine-evaluation-data.csv", header=TRUE, sep=",")[ ,-1]
+```
+
+
+\newpage
+
+# Data Exploration
+
+## Summary Statistics
+
+|   Below we can view both our data as well as a table with the summary statistics of our 14 predictor variables.
+
+
+```{r}
+kable(head(training),format = "latex",booktabs = TRUE) %>% kable_styling(latex_options =c("scale_down","HOLD_position","striped") )
+```
+
+
+```{r}
+kable(describe((training %>% select(where(is.numeric) & !TARGET))),format = "latex",booktabs = TRUE) %>% kable_styling(latex_options =c("scale_down","HOLD_position","striped") )
+
+``` 
+
+
+
+## Missing Variables
+
+|   According to our summary statistics above, and the visual shown below, about half of our predictor variables have missing values. From the least amount of missing values to the most, these include "pH", "ResidualSugar", "Chlorides", "FreeSulfurDioxide", "Alcohol", "TotalSulfurDioxide", "Sulphates", and "STARS".
+
+|   We also observe that there are quite a few variables with negative values, and we will look into this to verify that they are legitimate.
+
+```{r}
+plot_missing(training)
+```
+
+|   We can also observe that the "TARGET" variable, which is the number of cases purchased, ranges from 0 to 8 and it does not seem to be evenly distributed throughout the data. We can observe that about 44% of the wines in the data have been purchased in batches of 3 to 4 cases.
+
+```{r}
+prop.table(table(training$TARGET))
+```
+
+
+\newpage
+
+|   We can observe below a map of the missing values. It appears that the missing values for "STARS" is spread out through the data, indicating that our missing values do no represent a singular group of wines. 
+
+```{r}
+missmap((training %>%  mutate(across(everything(),~abs(.)))))
+```
+
+
+|   Below is the result of the Little's test statistic  to assess if data is missing completely at random (MCAR). The null hypothesis in this test is that the data is MCAR, and the test statistic is a chi-squared value. We can conclude from this test that our missing values are Missing at Random (MAR).   
+
+  
+```{r}
+kable(mcar_test((training %>%  mutate(across(everything(),~abs(.))))),caption = "Little's Test" ) %>% kable_styling(latex_options =c("scale_down","HOLD_position","striped") )
+```
+
+
+## Visual Analysis of Data Structure 
+ 
+|   The insight gained from the statistical analysis permitted us to make note of further data of interest that needed to be analyzed in depth prior to the creation of our models. To confirm these irregularities we then constructed visual representations consisting of density plots, histograms, and boxplots.
+
+|   We can observe from the histograms below that most of our variables appear to be following a close to normal distribution, as it is also evident in the density plots. The only variables that do not show a close to normal distribution seem to be ordinal variables. "AcidIndex", "LabelAppeal" and "STARS" are based on a rating scale about an attribute of the wine.
+
+```{r}
+plot_histogram(training)
+```
+
+```{r}
+plot_density(training)
+```
+
+
+```{r}
+plot_boxplot(
+  data = training,
+  by = "TARGET")
+```
+
+\newpage
+
+# Data Preparation
+ 
+## Removing Eroneous Values
+
+|   In our data set we discovered many negative values. After some investigation, we concluded that the chemical properties of wine may not be measured in negative values. Only positive values describe if certain chemicals exist in wine. Zero indicating the chemical is not present or a positive value otherwise. We will use take absolute value of all our variables to fix this problem.
+
+|   The variable "LabelAppeal" has approximately 28% negative values. It provides a rating of wine bottle label and may be treated as a categorical variable. It is safe to assume the value of -2 is worst, and 2 is best as the variable only has five values.
+
+
+|   In addition, we also discovered many wines that were either more acidic than stomach acid or, on the opposite end, had a pH that was almost the same as water. After some research, we decided to cut off all variables with a pH below 3, and above a pH of 4.19. 
+
+
+```{r Negative values}
+modi_training <- training
+modi_evaluation <- evaluation
+
+
+modi_training <- modi_training %>% mutate(across(everything() & !LabelAppeal,~abs(.))) %>% mutate(STARS = as.factor(STARS),LabelAppeal=as.factor(LabelAppeal))
+
+
+ 
+modi_evaluation <- modi_evaluation %>% mutate(across(everything() & !LabelAppeal ,~abs(.))) %>% mutate(STARS = as.factor(STARS),LabelAppeal=as.factor(LabelAppeal))
+
+```
+ 
+ 
+```{r}
+modi_training <- modi_training  %>% filter(pH<=4.19 & pH>=3 | is.na(pH))  
+
+
+modi_evaluation <- modi_evaluation %>% filter(pH<=4.19 & pH>=3 | is.na(pH))
+```
+ 
+ 
+ 
+ 
+## Missing Value Handling
+
+
+|   As we mentioned earlier, more than half of our predictor variables have missing values. We will be using the MICE package to impute the missing values. 
+
+
+```{r imputation}
+
+# Using the mice package to impute the missing values
+modi_training <- mice(modi_training, seed=321,printFlag=F)
+modi_training <- complete(modi_training)
+modi_training <- as.data.frame(modi_training)
+
+#We also apply same transformations to the "evaluation" dataset in order to make the predictions later on
+modi_evaluation <- mice(modi_evaluation, seed=321,printFlag=F)
+modi_evaluation <- complete(modi_evaluation)
+modi_evaluation <- as.data.frame(modi_evaluation)
+```
+
+|   Below is a look at the largest correlations of our newly created data set, using the imputed values from MICE
+
+```{r}
+corr_simple <- function(data=df,sig=0.2){
+  
+  library(corrplot)
+  #convert data to numeric in order to run correlations
+  #convert to factor first to keep the integrity of the data - each value will become a number rather than turn into NA
+  df_cor <- data %>% mutate_if(is.character, as.factor)
+  df_cor <- df_cor %>% mutate_if(is.factor, as.numeric)  #run a correlation and drop the insignificant ones
+  corr <- cor(df_cor)
+  #prepare to drop duplicates and correlations of 1     
+  corr[lower.tri(corr,diag=TRUE)] <- NA 
+  #drop perfect correlations
+  corr[corr == 1] <- NA   #turn into a 3-column table
+  corr <- as.data.frame(as.table(corr))
+  #remove the NA values from above 
+  corr <- na.omit(corr)   #select significant values  
+  corr <- subset(corr, abs(Freq) > sig) 
+  #sort by highest correlation
+  corr <- corr[order(-abs(corr$Freq)),]   #print table
+  #print(corr)  #turn corr back into matrix in order to plot with corrplot
+  mtx_corr <- reshape2::acast(corr, Var1~Var2, value.var="Freq")
+  
+  #plot correlations visually
+  corrplot(mtx_corr, is.corr=FALSE, tl.col="black", na.label=" ")
+}
+
+corr_simple(modi_training) 
+
+
+
+plot(modi_training$TARGET~modi_training$LabelAppeal)
+
+plot(modi_training$TARGET~modi_training$STARS)
+
+
+
+```
+
+
+
+
+```{r}
+kable(describe((modi_training %>% select(where(is.numeric) & !TARGET))),format = "latex",booktabs = TRUE) %>% kable_styling(latex_options =c("scale_down","HOLD_position","striped") )
+
+```
+
+
+# Model Building
+
+
+## Poisson Models
+
+|   Following the data preparation phase, we brainstormed how best to construct an appropriate model design process. We split our data into an additional training and test set in order to use 70% of it in the models and then evaluate their performance with the predictions against the remaining 30%. 
+
+```{r partition}
+set.seed(123)
+train_index <- createDataPartition(modi_training$TARGET, p = .7, list = FALSE, times = 1)
+additional_train <- modi_training[train_index,]
+additional_test <- modi_training[-train_index,]
+```
+
+
+```{r}
+
+modi_training_tran <- modi_training %>%
+   mutate(across(where(is.numeric) & !TARGET ,list(lam_one= ~((.+1)^boxcoxfit(.+1)$lambda) , log = ~log(.+1))  ) )  
+
+modi_evaluation_tran <- modi_evaluation %>%
+   mutate(across(where(is.numeric) & !TARGET ,list(lam_one= ~((.+1)^boxcoxfit(modi_training$.+1)$lambda) , log = ~log(.+1))  ) )  
+
+
+```
+
+```{r}
+set.seed(123)
+train_index_tran <- createDataPartition(modi_training_tran$TARGET, p = .7, list = FALSE, times = 1)
+additional_train_tran <- modi_training_tran[train_index_tran,]
+additional_test_tran <- modi_training_tran[-train_index_tran,]
+```
+
+
+
+|   Using the partition, we constructed a saturated count regression model which contained all variables of the dataset. This gave us a starting point to analyze the statistical significance of each variable and their associated correlations to the dependent variable.
+
+
+
+```{r}
+model1 = glm(TARGET ~  ., data=additional_train, family=poisson)
+
+```
+
+
+```{r,}
+summary(model1)
+```
+
+
+
+\pagebreak
+
+|   Our second model is based on only the predictor variables that had statistical significance from our previous model.
+
+
+```{r}
+model2 = glm(TARGET ~ pH + LabelAppeal + AcidIndex + STARS , data=additional_train, family=poisson)
+
+```
+
+
+```{r}
+summary(model2)
+```
+
+
+\pagebreak
+
+## Negative Binomial
+
+```{r}
+neg_bi_1 <- glm.nb(TARGET~.,data=additional_train)
+```
+
+
+
+```{r}
+summary(neg_bi_1)
+```
+
+
+\pagebreak
+
+|   We can then generate a new model using the stepAIC function
+
+
+```{r}
+neg_bi_2 <- stepAIC(neg_bi_1,trace=F)
+```
+
+
+```{r}
+summary(neg_bi_2)
+```
+
+\pagebreak 
+
+|   Finally, we explore using the transformed data
+
+
+
+```{r}
+neg_bi_3 <- glm.nb(TARGET~.,data=additional_train_tran)
+```
+
+
+
+```{r}
+summary(neg_bi_3)
+```
+
+
+
+
+
+## Multiple Linear Regression 
+
+|   First we create a model with all our variables
+
+
+```{r}
+mmlr_1 <- lm(TARGET~.,data=additional_train)
+```
+
+
+
+```{r}
+summary(mmlr_1)
+```
+
+\newpage 
+
+
+
+```{r}
+mmlr_2 <- stepAIC(mmlr_1,trace=F)
+```
+
+| Now we look at the results of using stepAIC
+
+```{r}
+summary(mmlr_2)
+```
+
+
+\newpage
+
+# Model Selection
+
+|   We begin by automatically disqualifying our multiple linear regression models. As the predictor variable is not a continuous numeric set of values with a linear relationship, we cannot pass the normality assumption required for linear regression and therefore must rule out these models as being valid.
+
+
+```{r}
+plot(mmlr_1)
+```
+
+|   We notice that both the poisson and negative binomal models are hardly any different. All our models appear to struggle in the same areas. There are counts shown below that are severely overfitted as well as other counts that are severely underffiting. We see that all our models also have a very similar Rsquared value when predicting the TARGET value on the evaluation data we created. Overall, it appears that our third negative binomal model, which uses all variables plus some transformed values, had the best RSquared score, but it's only by a tiny margin. We shall use this model for now and look to find ways to improve it in the future. 
+
+
+
+```{r}
+countreg::rootogram(model1)
+```
+
+
+```{r}
+countreg::rootogram(model2)
+```
+
+```{r}
+countreg::rootogram(neg_bi_3)
+```
+
+
+
+
+
+```{r}
+postResample(pred = predict(model1,additional_test), obs =additional_test$TARGET)
+```
+
+
+```{r}
+
+
+
+postResample(pred = round(predict(model1,additional_test,type = "response")), obs =additional_test$TARGET)
+
+
+```
+
+
+```{r}
+postResample(pred = round(predict(model2,additional_test,type = "response")), obs =additional_test$TARGET)
+
+```
+
+
+
+```{r}
+postResample(pred = round(predict(neg_bi_3,additional_test_tran,type = "response")), obs =additional_test_tran$TARGET)
+
+
+
+
+```
+
+\newpage
+
+## Predicting 
+
+|   We compute our 'TARGET' variable on the evaluation data and look at the boxplot produced using it below.
+
+
+```{r}
+modi_evaluation$TARGET <- round(predict(neg_bi_3,modi_evaluation_tran,type = "response"))
+
+
+plot_boxplot(modi_evaluation,by="TARGET")
+
+```
+
+
+
+
+```{r,eval=F}
+write.csv(modi_evaluation,"evaluation_predictions")
+```
+
+
+\newpage 
+
+# Conclusion
+
+|   This assignment had us work with some truly dirty data. Negative values where there should only be positive values, variables that were clearly impossible with pH values that would either melt your stomach or taste like flavored water. Topping it off, we had an overwhelming number of missing values. We managed to deal with these issues  however, it would definitely be worth investigating alternative approaches to the ones used here. 
+
+|   In building our models, we were not able to get the most accurate of scores. It seems apparent from our variable exploration that there were not many significant correlations in our data, and it proved to undermine our ability to accurately predict our target variable. Given more time, we would love to explore alternative modeling techniques that could be used to improve our predictive capability. For now, we are overall very happy with the results we had. Thank you very much for reading our assignment. 
